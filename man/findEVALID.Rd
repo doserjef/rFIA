@@ -29,7 +29,7 @@ Any \code{state} or \code{year} specified must be present in \code{db} to return
 \value{ A numeric vector containing the EVALIDs associated with states, years, or evaluation types specified.
 }
 \references{
-FIA Database User Guide: \url{https://www.fia.fs.fed.us/library/database-documentation/}
+FIA Database User Guide: \url{https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi}
 }
 
 \author{

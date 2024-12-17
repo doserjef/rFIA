@@ -26,7 +26,7 @@ intersectFIA(db, polys, nCores = 1)
 \details{
 All polygon attributes will be joined onto the PLOT table.
 
-Primarily useful if you intend to make multiple calls to rFIA estimator functions, e.g., you need to call both \code{\link{tpa}} and \code{\link{biomass}} and group by spatial polygons in both cases. If using the \code{polys} argument in each function call, spatial intersection will occur mulitple times, and hence be slower than performing the intersection a single time upfront.
+Primarily useful if you intend to make multiple calls to rFIA estimator functions, e.g., you need to call both \code{\link{tpa}} and \code{biomass} and group by spatial polygons in both cases. If using the \code{polys} argument in each function call, spatial intersection will occur mulitple times, and hence be slower than performing the intersection a single time upfront.
 }
 
 
@@ -38,7 +38,7 @@ FIA.Database or Remote.FIA.Database, depending on specification of \code{db}.
 \references{
 rFIA website: \url{https://rfia.netlify.app/}
 
-FIA Database User Guide: \url{https://www.fia.fs.fed.us/library/database-documentation/}
+FIA Database User Guide: \url{https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi}
 
 Bechtold, W.A.; Patterson, P.L., eds. 2005. The Enhanced Forest Inventory and Analysis Program - National Sampling Design and Estimation Procedures. Gen. Tech. Rep. SRS - 80. Asheville, NC: U.S. Department of Agriculture, Forest Service, Southern Research Station. 85 p. \url{https://www.srs.fs.usda.gov/pubs/gtr/gtr_srs080/gtr_srs080.pdf}
 

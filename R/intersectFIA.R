@@ -1,5 +1,4 @@
-
-#'@export
+# TODO: needs checking
 intersectFIA <- function(db, polys, nCores = 1) {
 
 

@@ -1,15 +1,15 @@
 Package: rFIA
 Type: Package
 Title: Estimation of Forest Variables using the FIA Database
-Version: 1.0.1
-Author: Hunter Stanke [aut, cre],
-  Andrew Finley [aut]
-Maintainer: Hunter Stanke <stankehu@msu.edu>
-Description: The goal of 'rFIA' is to increase the accessibility and use of the United States Forest Services (USFS) Forest Inventory and Analysis (FIA) Database by providing a user-friendly, open source toolkit to easily query and analyze FIA Data. Designed to accommodate a wide range of potential user objectives, 'rFIA' simplifies the estimation of forest variables from the FIA Database and allows all R users (experts and newcomers alike) to unlock the flexibility inherent to the Enhanced FIA design. Specifically, 'rFIA' improves accessibility to the spatial-temporal estimation capacity of the FIA Database by producing space-time indexed summaries of forest variables within user-defined population boundaries. Direct integration with other popular R packages (e.g., 'dplyr', 'tidyr', and 'sf') facilitates efficient space-time query and data summary, and supports common data representations and API design. The package implements design-based estimation procedures outlined by Bechtold & Patterson (2005) <doi:10.2737/SRS-GTR-80>, and has been validated against estimates and sampling errors produced by FIA 'EVALIDator'. Current development is focused on the implementation of spatially-enabled model-assisted estimators to improve population, change, and ratio estimates.
+Version: 1.1.0.9000
+Authors@R: c(person("Hunter", "Stanke", role=c("aut")), person("Andrew", "Finley", role = c("aut")), person("Jeffrey", "Doser", role=c("aut", "cre"), email="jwdoser@ncsu.edu"))
+Author: Hunter Stanke [aut], Andrew Finley [aut], Jeffrey Doser [aut, cre] 
+Maintainer: Jeffrey Doser <jwdoser@ncsu.edu> 
+Description: The goal of 'rFIA' is to increase the accessibility and use of the United States Forest Services (USFS) Forest Inventory and Analysis (FIA) Database by providing a user-friendly, open source toolkit to easily query and analyze FIA Data. Designed to accommodate a wide range of potential user objectives, 'rFIA' simplifies the estimation of forest variables from the FIA Database and allows all R users (experts and newcomers alike) to unlock the flexibility inherent to the Enhanced FIA design. Specifically, 'rFIA' improves accessibility to the spatial-temporal estimation capacity of the FIA Database by producing space-time indexed summaries of forest variables within user-defined population boundaries. Direct integration with other popular R packages (e.g., 'dplyr', 'tidyr', and 'sf') facilitates efficient space-time query and data summary, and supports common data representations and API design. The package implements design-based estimation procedures outlined by Bechtold & Patterson (2005) <doi:10.2737/SRS-GTR-80>, and has been validated against estimates and sampling errors produced by FIA 'EVALIDator'. Current development is focused on the implementation of spatially-enabled model-assisted and model-based estimators to improve population, change, and ratio estimates.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Depends: R (>= 3.1.0)
+Depends: R (>= 3.5.0)
 Imports: 
     dplyr (>= 1.0.0),
     dtplyr (>= 1.0.0),
@@ -30,5 +30,5 @@ Suggests:
     R2jags,
     coda
 RoxygenNote: 7.1.2
-URL: https://github.com/hunter-stanke/rFIA
-BugReports: https://github.com/hunter-stanke/rFIA/issues
+URL: https://github.com/doserjef/rFIA
+BugReports: https://github.com/doserjef/rFIA/issues

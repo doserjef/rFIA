@@ -52,7 +52,7 @@ If multiple subsets of the FIA database are held in the same directory (e.g. Mic
 \references{
 FIA DataMart: \url{https://apps.fs.usda.gov/fia/datamart/datamart.html}
 
-FIA Database User Guide: \url{https://www.fia.fs.fed.us/library/database-documentation/}
+FIA Database User Guide: \url{https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi}
 }
 
 \author{

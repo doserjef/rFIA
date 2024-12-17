@@ -1,4 +1,4 @@
-#' @export
+# TODO: needs assessment
 plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet = FALSE,
                     se = FALSE, n.max = NULL, plot.title = NULL, y.lab = NULL, x.lab = NULL,
                     legend.title = NULL, legend.labs = waiver(), limits = c(NA, NA),
@@ -35,7 +35,7 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
   ## IF data is not an FIA.Database, y is required
   if (any(class(data) %in% c('FIA.Database') == FALSE) & quo_name(y_quo) == "NULL"){
     ## If it's remote, just read in the plot table
-    if (class(data) == 'Remote.FIA.Database'){
+    if (is(data, 'Remote.FIA.Database')) {
       data <- readFIA(data$dir, tables = 'PLOT')
     } else {
       stop('Argument "y" required unless plotting an FIA.Database object.')

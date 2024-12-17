@@ -1,5 +1,3 @@
-
-
 if (!exists("meta") || is.null(meta)) meta <- packageDescription("rFIA")
 
 citHeader("To cite package", sQuote(meta$Package), "in publications use:")
@@ -7,9 +5,9 @@ citHeader("To cite package", sQuote(meta$Package), "in publications use:")
 year <- sub(".*(2[[:digit:]]{3})-.*", "\\1", meta$Date, perl = TRUE)
 vers <- paste("R package version", meta$Version)
 
-citEntry(entry = "Article",
+bibentry(bibtype = "Article",
   title        = "{rFIA}: An R package for estimation of forest attributes with the US Forest Inventory and Analysis database",
-  author       = personList(as.person("Hunter Stanke"), as.person("Andrew O Finley"), as.person("Aaron S Weed"), as.person("Brian F Walters"), as.person("Grant M Domke")),
+  author       = c(as.person("Hunter Stanke"), as.person("Andrew O Finley"), as.person("Aaron S Weed"), as.person("Brian F Walters"), as.person("Grant M Domke")),
   journal      = "Environmental Modelling & Software",
   year         = "2020",
   volume       = "127",

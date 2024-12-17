@@ -1,5 +1,5 @@
-## Spatiotemporal clip of FIADB
-#' @export
+# Spatiotemporal clip of FIADB
+# TODO: needs assessment.
 clipFIA <- function(db,
                     mostRecent = TRUE,
                     mask = NULL,
@@ -9,9 +9,9 @@ clipFIA <- function(db,
                     nCores = 1) {
 
   ## Some warnings
-  if (class(db) != "FIA.Database"){
+  if (!is(db, 'FIA.Database')) {
     ## Add clipFIA arguments to remote database
-    if (class(db) == 'Remote.FIA.Database'){
+    if (is(db, 'Remote.FIA.Database')) {
 
       db$mostRecent = mostRecent
       ## Lists won't accept NULL,
