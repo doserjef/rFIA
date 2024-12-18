@@ -534,9 +534,9 @@ udAreaDomain <- function(db, areaDomain) {
   # Only evaluate if areaDomain isn't null
   if (!rlang::quo_is_null(areaDomain)) {
     # We'll join up PLOT and COND, and evaluate in the context of the joined table
-    plt <- db$PLOT |>
+    plt <- db$PLOT %>% 
       dplyr::filter(PLOT_STATUS_CD == 1)
-    cnd <- db$COND |>
+    cnd <- db$COND %>% 
       dplyr::filter(COND_STATUS_CD == 1)
 
 

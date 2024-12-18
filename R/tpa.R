@@ -53,15 +53,15 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
     }
 
     # Totals and ratios ---------------
-    aEst <- aEst |> 
-      dplyr::group_by(!!!aGrpSyms) |> 
-      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) |> 
+    aEst <- aEst %>% 
+      dplyr::group_by(!!!aGrpSyms) %>% 
+      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>% 
       dplyr::select(!!!aGrpSyms, fa_mean, fa_var, nPlots.y)
 
-    tEst <- tEst |> 
-      dplyr::group_by(!!!grpSyms) |>
-      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) |> 
-      dplyr::left_join(aEst, by = aGrpBy) |> 
+    tEst <- tEst %>% 
+      dplyr::group_by(!!!grpSyms) %>%
+      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>% 
+      dplyr::left_join(aEst, by = aGrpBy) %>% 
       dplyr::mutate(TREE_TOTAL = tPlot_mean, 
                     BA_TOTAL = bPlot_mean,
                     AREA_TOTAL = fa_mean,
@@ -84,7 +84,7 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     # Plot counts
                     nPlots_TREE = nPlots.x, 
                     nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) |>
+                    N = P2PNTCNT_EU) %>%
       dplyr::select(!!!grpSyms, TPA, BAA, TREE_TOTAL, BA_TOTAL, AREA_TOTAL, 
                     TPA_VAR, BAA_VAR, TREE_TOTAL_VAR, BA_TOTAL_VAR, AREA_TOTAL_VAR, 
                     TPA_SE, BAA_SE, TREE_TOTAL_SE, BA_TOTAL_SE, AREA_TOTAL_SE, 
@@ -104,16 +104,16 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
   }
 
   # Pretty output
-  tEst <- tEst |>
-    dplyr::ungroup() |> 
-    dplyr::mutate_if(is.factor, as.character) |> 
+  tEst <- tEst %>%
+    dplyr::ungroup() %>% 
+    dplyr::mutate_if(is.factor, as.character) %>% 
     as_tibble()
 
   # We don't include YEAR in treeList output, and NA groups will be important
   # for retaining non-treed forestland
   if (!treeList) {
-    tEst <- tEst |> 
-      tidyr::drop_na(grpBy[!c(grpBy %in% names(polys))]) |> 
+    tEst <- tEst %>% 
+      tidyr::drop_na(grpBy[!c(grpBy %in% names(polys))]) %>% 
       dplyr::arrange(YEAR)
   }
 

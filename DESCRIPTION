@@ -28,7 +28,8 @@ Suggests:
     rmarkdown,
     gganimate,
     R2jags,
-    coda
+    coda,
+    testthat
 RoxygenNote: 7.1.2
 URL: https://github.com/doserjef/rFIA
 BugReports: https://github.com/doserjef/rFIA/issues
