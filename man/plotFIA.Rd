@@ -16,7 +16,7 @@ plotFIA(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet = FALSE,
            }
 
 \arguments{
-  \item{data}{dataframe, \code{sf} object, or \code{FIA.Database} object; FIA summary produced from other \code{rFIA} functions (e.g. \code{\link{tpa}}, \code{\link{biomass}}, etc.). Also accepts \code{FIA.Database}, will return map of plot locations.}
+  \item{data}{dataframe, \code{sf} object, or \code{FIA.Database} object; FIA summary produced from other \code{rFIA} functions (e.g. \code{tpa}, \code{biomass}, etc.). Also accepts \code{FIA.Database}, will return map of plot locations.}
 
   \item{y}{variable contained in \code{data} which will be used as y-axis or to fill polygons (spatial). NOT quoted.}
 

@@ -155,6 +155,7 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # grpBy names in COND
   grpC <- names(db$COND)[names(db$COND) %in% grpBy & 
                          !c(names(db$COND) %in% grpP)]
+  # grpBy names in TREE                         
   grpT <- names(db$TREE)[names(db$TREE) %in% grpBy & 
                          !c(names(db$TREE) %in% c(grpP, grpC))]
 

@@ -16,6 +16,9 @@ export(plotFIA)
 export(readFIA)
 export(tpa)
 export(writeFIA)
+export(diversity)
+
+
 import(bit64)
 import(dplyr)
 import(dtplyr)
