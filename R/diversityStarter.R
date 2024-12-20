@@ -295,6 +295,8 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       tEst <- eu.sums$x
       aEst <- eu.sums$y
 
+      # TODO: this can lead to a many-to-many join. Go through this
+      #       to make sure this is actually what you want.
       # Using this to return a tree list for gamma and beta
       full <- data %>%
         dplyr::mutate(state = state * tDI) %>%
