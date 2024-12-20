@@ -13,17 +13,8 @@ knitr::opts_chunk$set(
 ```
 # rFIA: Unlocking the FIA Database in R <a href='https://rfia.netlify.app'><img src='man/figures/logo.PNG' align="right" height="139" /></a>
 
-
-
-
-```{r, echo=FALSE, results='asis', message=FALSE}
-#library(badger)
-cat(
-	badger::badge_cran_release("rFIA", "green"),
-	badger::badge_custom("Cite rFIA", "in EMS", "yellow", "https://www.sciencedirect.com/science/article/abs/pii/S1364815219311089")
-	# badger::badge_cran_download("rFIA", "grand-total", "blue")
-)
-```
+[![CRAN](https://www.r-pkg.org/badges/version/rFIA)](https://CRAN.R-project.org/package=rFIA)
+[![Codecov test coverage](https://codecov.io/gh/doserjef/rFIA/branch/main/graph/badge.svg)](https://app.codecov.io/gh/doserjef/rFIA?branch=main)
 
 
 ![US Biomass](man/figures/usBiomass.jpg)

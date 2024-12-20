@@ -3,8 +3,9 @@
 
 # rFIA: Unlocking the FIA Database in R <a href='https://rfia.netlify.app'><img src='man/figures/logo.PNG' align="right" height="139" /></a>
 
-[![](https://www.r-pkg.org/badges/version/rFIA?color=green)](https://cran.r-project.org/package=rFIA)
-[![](https://img.shields.io/badge/Cite%20rFIA-in%20EMS-yellow.svg)](https://www.sciencedirect.com/science/article/abs/pii/S1364815219311089)
+[![CRAN](https://www.r-pkg.org/badges/version/rFIA)](https://CRAN.R-project.org/package=rFIA)
+[![Codecov test
+coverage](https://codecov.io/gh/doserjef/rFIA/branch/main/graph/badge.svg)](https://app.codecov.io/gh/doserjef/rFIA?branch=main)
 
 <figure>
 <img src="man/figures/usBiomass.jpg" alt="US Biomass" />
@@ -223,7 +224,7 @@ plotFIA(tpaRI_spsc, BAA, grp = COMMON_NAME, x = sizeClass,
         n.max = 5) # Only want the top 5 species, try n.max = -5 for bottom 5
 ```
 
-<img src="man/figures/README-unnamed-chunk-6-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-5-1.png" width="100%" />
 
 **What if I want estimates for a specific type of tree (ex. greater than
 12-inches DBH and in a canopy dominant or subdominant position) in a
@@ -270,7 +271,7 @@ tpaRI_counties <- tpa(fiaRI_MR, polys = countiesRI, returnSpatial = TRUE)
 plotFIA(tpaRI_counties, BAA) # Plotting method for spatial FIA summaries, also try 'TPA' or 'TPA_PERC'
 ```
 
-<img src="man/figures/README-unnamed-chunk-8-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-7-1.png" width="100%" />
 
 **We produced a really cool time series earlier, how would I marry the
 spatial and temporal capacity of `rFIA` to produce estimates across
