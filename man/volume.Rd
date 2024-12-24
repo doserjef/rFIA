@@ -47,7 +47,7 @@ volume(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
 
   \item{byPlot}{logical; if TRUE, returns estimates for individual plot locations instead of population estimates.}
 
-  \item{treeList}{logical; if TRUE, returns tree-level summaries intended for subsequent use with \code{\link{customPSE}}}.
+  \item{treeList}{logical; if TRUE, returns tree-level summaries intended for subsequent use with \code{customPSE}}.
 
   \item{nCores}{numeric; number of cores to use for parallel implementation. Check available cores using \code{\link{detectCores}}. Default = 1, serial processing.}
 }
