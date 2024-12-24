@@ -17,6 +17,7 @@ export(readFIA)
 export(tpa)
 export(writeFIA)
 export(diversity)
+export(volume)
 
 
 import(bit64)
