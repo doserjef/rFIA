@@ -25,10 +25,9 @@ test_that("out is of class tbl_df", {
 })
 
 # Test 3 ------------------------------
-# Estimates for live white pine (> 12" DBH) on forested mesic sites
+# Estimates for live white pine on forested mesic sites
 out <- seedling(fiaRI_mr,
-           treeType = 'live',
-           treeDomain = SPCD == 129 & DIA > 12, # Species code for white pine
+           treeDomain = SPCD == 129, # Species code for white pine
            areaDomain = PHYSCLCD %in% 21:29) # Mesic Physiographic classes
 
 test_that("out is of class tbl_df", {
