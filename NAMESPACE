@@ -18,6 +18,7 @@ export(tpa)
 export(writeFIA)
 export(diversity)
 export(volume)
+export(seedling)
 
 
 import(bit64)

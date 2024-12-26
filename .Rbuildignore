@@ -7,3 +7,4 @@
 ^README\.html$
 ^\.github$
 ^tests$
+^codecov\.yml$
