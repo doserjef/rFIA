@@ -19,6 +19,7 @@ export(writeFIA)
 export(diversity)
 export(volume)
 export(seedling)
+export(invasive)
 
 
 import(bit64)
