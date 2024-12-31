@@ -255,7 +255,7 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   } else {
     # Population estimation or prep for it (treeList) ---------------------
     # Create a list of symbols for the grpBy statements
-    aGrpSyms <- syms(aGrpBy)
+    aGrpSyms <- rlang::syms(aGrpBy)
 
     # Condition list
     a <- data %>% 
@@ -269,7 +269,7 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Create list of symols for the grpBy statements
-    grpSyms <- syms(grpBy)
+    grpSyms <- rlang::syms(grpBy)
     # Tree list
     t <- data %>% 
       dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
