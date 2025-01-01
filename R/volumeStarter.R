@@ -251,7 +251,7 @@ volumeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Volume estimates for each plot
     t <- data %>% 
       # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::rename(YEAR = MEASYEAR) %>% 
+      dplyr::mutate(YEAR = MEASYEAR) %>% 
       dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
       dtplyr::lazy_dt() %>% 
       dplyr::group_by(!!!grpSyms, PLT_CN) %>%  

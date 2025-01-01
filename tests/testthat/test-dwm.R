@@ -47,3 +47,10 @@ test_that("multiple years", {
   expect_gt(length(unique(out$YEAR)), 1)
 })
 
+# Test 5 ------------------------------
+# Most recent estimates by county
+out <- dwm(fiaRI_mr, polys = countiesRI, returnSpatial = TRUE)
+test_that("out is of class sf", {
+  expect_s3_class(out, "sf")
+})
+

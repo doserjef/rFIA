@@ -1,9 +1,8 @@
-tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL, 
-                       returnSpatial = FALSE, bySpecies = FALSE, 
-                       bySizeClass = FALSE, landType = 'forest', 
-                       treeType = 'live', method = 'TI', lambda = 0.5, 
-                       treeDomain = NULL, areaDomain = NULL, totals = FALSE, 
-                       byPlot = FALSE, treeList = FALSE, nCores = 1, remote, mr) {
+standStructStarter <- function(x, db, grpBy_quo = NULL, polys = NULL, 
+                               returnSpatial = FALSE, landType = 'forest', 
+                               method = 'TI', lambda = 0.5, areaDomain = NULL, 
+                               totals = FALSE, byPlot = FALSE, nCores = 1, 
+                               remote, mr) {
 
   # Read required data and prep the database ------------------------------
   reqTables <- c('PLOT', 'TREE', 'COND', 'POP_PLOT_STRATUM_ASSGN', 
@@ -34,10 +33,6 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   if (landType %in% c('timber', 'forest') == FALSE) {
     stop('landType must be one of: "forest" or "timber".')
   }
-  # treeType --------------------------
-  if (treeType %in% c('live', 'dead', 'gs', 'all') == FALSE) {
-    stop('treeType must be one of: "live", "dead", "gs", or "all".')
-  }
   # db required tables ----------------
   if (any(reqTables %in% names(db) == FALSE)) {
     missT <- reqTables[reqTables %in% names(db) == FALSE]
@@ -61,7 +56,7 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   grpBy <- grpByToChar(db, grpBy_quo)
 
   # Unique plot ID through time (pltID)
-  if (byPlot | treeList) {
+  if (byPlot) {
     grpBy <- c('pltID', grpBy)
   }
 
@@ -92,9 +87,6 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # Land type
   db$COND$landD <- landTypeDomain(landType, db$COND$COND_STATUS_CD, 
                                   db$COND$SITECLCD, db$COND$RESERVCD)
-  # Tree type
-  db$TREE$typeD <- treeTypeDomain(treeType, db$TREE$STATUSCD, db$TREE$DIA, 
-                                  db$TREE$TREECLCD)
 
   # Spatial boundary (determine which of the plots fall within the polygons
   # supplied in polys)
@@ -108,16 +100,12 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # User defined domain indicator for area (ex. specific forest type)
   db <- udAreaDomain(db, areaDomain)
 
-  # User defined domain indicator for trees (ex. trees > 20 ft tall)
-  db <- udTreeDomain(db, treeDomain)
-
-
   # Handle population tables ----------------------------------------------
   # Filtering out all inventories that are not relevant to the current 
   # estimation type. If using estimator other than TI, handle the differences in 
   # P2POINTCNT and in assigning YEAR column (YEAR = END_INVYR if method = 'TI')
   # TODO: need to go through handlePops
-  pops <- handlePops(db, evalType = c('VOL'), method, mr)
+  pops <- handlePops(db, evalType = c('CURR'), method, mr)
 
   # A lot of states do their stratification in such a way that makes it impossible
   # to estimate variance of annual panels with the post-stratified estimator. That is, 
@@ -126,25 +114,6 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # TODO: need to go through mergeSmallStrata
   if (stringr::str_to_upper(method) %in% c('SMA', 'LMA', 'EMA', 'ANNUAL') & !byPlot) {
     pops <- mergeSmallStrata(db, pops)
-  }
-
-  # Handle canned groups --------------------------------------------------
-  # Add species to groups
-  # Note that intData is an internal data object. 
-  if (bySpecies) {
-    db$TREE <- db$TREE %>%
-      dplyr::left_join(dplyr::select(intData$REF_SPECIES_2018, 
-                                     c('SPCD', 'COMMON_NAME', 'GENUS', 'SPECIES')), 
-                       by = 'SPCD') %>%
-      dplyr::mutate(SCIENTIFIC_NAME = paste(GENUS, SPECIES, sep = ' ')) %>% 
-      dplyr::mutate_if(is.factor, character)
-    grpBy <- c(grpBy, 'SPCD', 'COMMON_NAME', 'SCIENTIFIC_NAME')
-  }
-
-  # Break into size classes
-  if (bySizeClass) {
-    grpBy <- c(grpBy, 'sizeClass')
-    db$TREE$sizeClass <- makeClasses(db$TREE$DIA, interval = 2, numLabs = TRUE)
   }
 
   # Prep the tree list ----------------------------------------------------
@@ -165,10 +134,6 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     dplyr::select(PLT_CN, STATECD, MACRO_BREAKPOINT_DIA, INVYR, MEASYEAR, 
                   PLOT_STATUS_CD, dplyr::all_of(grpP), sp, COUNTYCD) %>% 
     # Drop non-forested plots, and those otherwise outside our domain of interest.
-    # TODO: add PLOT_STATUS_CD to the iPad descriptions. A code that describes the
-    #       sampling status of the plot. (1 = sampled, at least one accessible 
-    #       forest land condtion; 2 = sampled, no accessible forest land condition; 
-    #       3 = non-sampled).
     dplyr::filter(PLOT_STATUS_CD == 1 & sp == 1) %>% 
     # Drop visits not used in our eval of interest
     dplyr::filter(PLT_CN %in% pops$PLT_CN)
@@ -185,18 +150,11 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # TREE ------------------------------
   db$TREE <- db$TREE %>%
     dplyr::select(PLT_CN, CONDID, DIA, SPCD, TPA_UNADJ, SUBP, TREE, 
-                  dplyr::all_of(grpT), tD, typeD) %>% 
+                  dplyr::all_of(grpT), CCLCD) %>% 
     # Drop plots outside our domain of interest
-    dplyr::filter(!is.na(DIA) & TPA_UNADJ > 0 & tD == 1 & typeD == 1) %>%
+    dplyr::filter(!is.na(DIA) & TPA_UNADJ > 0) %>%
     # Drop visits not used in our eval of interest
     dplyr::filter(PLT_CN %in% db$PLOT$PLT_CN)
-
-  # Separate area grouping names from tree grouping names
-  if (!is.null(polys)) {
-    aGrpBy <- grpBy[grpBy %in% c(names(db$PLOT), names(db$COND), names(polys))]
-  } else {
-    aGrpBy <- grpBy[grpBy %in% c(names(db$PLOT), names(db$COND))]
-  }
 
   # Full tree list
   data <- db$PLOT %>% 
@@ -205,130 +163,102 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
   # Comprehensive indicator function
   data$aDI <- data$landD * data$aD * data$sp
-  data$tDI <- data$landD * data$aD * data$tD * data$typeD * data$sp
-  data$pDI <- data$landD * data$aD * data$tD * data$sp
 
   # Plot-level summaries --------------------------------------------------
-  if (byPlot & !treeList) {
+  if (byPlot) {
     grpBy <- c('YEAR', grpBy)
     # Create a list of symbols for the grpBy statements
     grpSyms <- rlang::syms(grpBy)
-    aGrpSyms <- rlang::syms(aGrpBy)
 
     # Plot-level estimates
     # Area
-    a <- data %>% 
+    a <- data %>%
+      dplyr::mutate(YEAR = MEASYEAR) %>%
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
       # Convert to a lazy data table for quicker analysis.
-      dtplyr::lazy_dt() %>% 
-      # Note the use of !!! to inject aGrpSyms back into an evaluation context.
-      dplyr::group_by(PLT_CN, !!!aGrpSyms) %>%
-      # Calculate proportion of area in the plot that meets the current area domain 
+      dtplyr::lazy_dt() %>%
+      # Note the use of !!! to inject grpSyms back into an evaluation context.
+      dplyr::group_by(PLT_CN, !!!grpSyms) %>%
+      # Calculate proportion of area in the plot that meets the current area domain
       dplyr::summarize(PROP_FOREST = sum(CONDPROP_UNADJ * aDI, na.rm = TRUE)) %>%
       # Convert to data frame
       as.data.frame()
 
-    # TPA and BAA for each plot. 
-    t <- data %>% 
-      # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::mutate(YEAR = MEASYEAR) %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
-      dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
-      dplyr::summarize(TPA = sum(TPA_UNADJ * tDI, na.rm = TRUE), 
-                       BAA = sum(basalArea(DIA) * TPA_UNADJ * tDI, na.rm = TRUE)) %>% 
-      as.data.frame() %>% 
-      dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>% 
-      dplyr::distinct()
+    # Structural stage
+    t <- data %>%
+      # Set the YEAR to the measurement year for plot-level estimates.
+      dplyr::mutate(YEAR = MEASYEAR) %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      dplyr::group_by(!!!grpSyms, PLT_CN, CONDID, CONDPROP_UNADJ, aDI) %>%
+      dplyr::summarize(STAGE = structHelper(DIA, CCLCD)) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(STAGE = stringr::str_to_upper(STAGE)) %>%
+      dplyr::group_by(!!!grpSyms, PLT_CN, STAGE) %>%
+      dplyr::summarize(PROP_STAGE = sum(CONDPROP_UNADJ * aDI, na.rm = TRUE)) %>%
+      as.data.frame() %>%
+      dplyr::distinct() %>%
+      dplyr::left_join(a, by = c('PLT_CN', grpBy))
 
     # Make it spatial if the user wants it.
     if (returnSpatial) {
-      t <- t %>% 
-        dplyr::filter(!is.na(LAT) & !is.na(LON)) %>% 
-        sf::st_as_sf(coords = c('LON', 'LAT'), 
+      t <- t %>%
+        dplyr::filter(!is.na(LAT) & !is.na(LON)) %>%
+        sf::st_as_sf(coords = c('LON', 'LAT'),
                      crs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')
       grpBy <- grpBy[grpBy %in% c('LAT', 'LON') == FALSE]
     }
 
-    out <- list(tEst = t, grpBy = grpBy, aGrpBy = aGrpBy)
+    out <- list(tEst = t, aEst = NULL, grpBy = grpBy, aGrpBy = NULL)
 
   } else {
     # Population estimation or prep for it (treeList) ---------------------
     # Create a list of symbols for the grpBy statements
-    aGrpSyms <- rlang::syms(aGrpBy)
+    grpSyms <- rlang::syms(grpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
-      # TODO: add PROP_BASIS to iPad notes.
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      # TODO: add CONDPROP_UNADJ to iPad notes
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
-      dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
+      dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!grpSyms, fa)
 
-    # Create list of symols for the grpBy statements
-    grpSyms <- rlang::syms(grpBy)
     # Tree list
-    t <- data %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
-      dplyr::mutate(tPlot = TPA_UNADJ * tDI, 
-                    bPlot = basalArea(DIA) * TPA_UNADJ * tDI) %>% 
-      # Need a code that tells us where the tree was measured 
-      # (macroplot, microplot, subplot)
-      dplyr::mutate(
-        TREE_BASIS = dplyr::case_when(
-          # When DIA is NA, adjustment is NA
-          is.na(DIA) ~ NA_character_,
-          # When DIA is less than 5", use microplot value
-          DIA < 5 ~ 'MICR',
-          # Use SUBP when macroplot breakpoint DIA is non-positive
-          MACRO_BREAKPOINT_DIA <= 0 ~ 'SUBP',
-          # When DIA is greater than 5", use subplot value, as long 
-          # as diameter is less than the minimum dia on macroplots
-          DIA >= 5 & is.na(MACRO_BREAKPOINT_DIA) ~ 'SUBP',
-          DIA >= 5 & DIA < MACRO_BREAKPOINT_DATA ~ 'SUBP',
-          # Use macroplot if DIA >= the min dbh measured on macroplots
-          DIA >= MACRO_BREAKPOINT_DIA ~ 'MACR'
-        )
-      ) %>% 
-      dplyr::filter(!is.na(TREE_BASIS)) %>% 
-      dplyr::select(PLT_CN, TREE_BASIS, SUBP, TREE, !!!grpSyms, tPlot, bPlot) %>% 
+    t <- data %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      dplyr::group_by(!!!grpSyms, PLT_CN, PROP_BASIS, CONDID, CONDPROP_UNADJ, aDI) %>%
+      dplyr::summarize(STAGE = structHelper(DIA, CCLCD)) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(STAGE = stringr::str_to_upper(STAGE), 
+                    cover = CONDPROP_UNADJ * aDI) %>%
+      dplyr::rename(AREA_BASIS = PROP_BASIS) %>%
       as.data.frame()
 
-    # Return a tree/condition list ready to be handed to `customPSE()`
-    if (treeList) {
-      tEst <- a %>% 
-        dplyr::left_join(t, by = c('PLT_CN', aGrpBy)) %>% 
-        dplyr::mutate(EVAL_TYP = 'VOL') %>% 
-        dplyr::select(PLT_CN, EVAL_TYP, TREE_BASIS, AREA_BASIS, 
-                      !!!grpSyms, CONDID, SUBP, TREE, 
-                      TPA = tPlot, BAA = bPlot, PROP_FOREST = fa)
+    # Adding STAGE to grpBy
+    aGrpBy <- grpBy
+    grpBy <- c(grpBy, "STAGE")
+    grpSyms <- rlang::syms(grpBy)
+    aGrpSyms <- rlang::syms(aGrpBy)
 
-      out <- list(tEst = tEst, aEst = NULL, grpBy = grpBy, aGrpBy = aGrpBy)
+    # Sum variable(s) up to plot-level and adjust for non-response
+    # TODO: need to go through sumToPlot
+    tPlt <- sumToPlot(t, pops, grpBy)
+    aPlt <- sumToPlot(a, pops, aGrpBy)
 
-    } else {
-      # If a tree list is not desired, let's move to population estimation.
-      # Sum variable(s) up to plot-level and adjust for non-response
-      # TODO: need to go through sumToPlot
-      tPlt <- sumToPlot(t, pops, grpBy)
-      aPlt <- sumToPlot(a, pops, aGrpBy)
+    # Add YEAR to groups
+    grpBy <- c('YEAR', grpBy)
+    aGrpBy <- c('YEAR', aGrpBy)
 
-      # Add YEAR to groups
-      grpBy <- c('YEAR', grpBy)
-      aGrpBy <- c('YEAR', aGrpBy)
+    # Sum variable(s) up to strata then estimation unit level
+    # TODO: need to go through sumToEU
+    eu.sums <- sumToEU(db, tPlt, aPlt, pops, grpBy, aGrpBy, method)
+    tEst <- eu.sums$x
+    aEst <- eu.sums$y
 
-      # Sum variable(s) up to strata then estimation unit level
-      # TODO: need to go through sumToEU
-      eu.sums <- sumToEU(db, tPlt, aPlt, pops, grpBy, aGrpBy, method)
-      tEst <- eu.sums$x
-      aEst <- eu.sums$y
-   
-      out <- list(tEst = tEst, aEst = aEst, grpBy = grpBy, aGrpBy = aGrpBy) 
-    } # population or tree-level estimation
+    out <- list(tEst = tEst, aEst = aEst, grpBy = grpBy, aGrpBy = aGrpBy)
   } # Population or plot-level estimation
-
   return(out)
-} # tpaStarter
+} # standStructStarter

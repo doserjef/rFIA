@@ -1589,7 +1589,7 @@ basalArea <- function(diameter, DIA_MID = NULL){
 ##  crownClass: canopy position of stem, suppressed and open grown excluded (CCLCD)
 structHelper <- function(dia, crownClass){
 
-  # Exclude suppressed and open grown stems from analysis
+  # Exclude suppressed (5) and open grown (1) stems from analysis
   dia = dia[crownClass %in% c(2,3,4)]
 
   # Total basal area within plot

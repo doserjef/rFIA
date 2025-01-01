@@ -173,7 +173,7 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Plot-level estimates
     # DWM estimates
     t <- data %>%
-      dplyr::rename(YEAR = MEASYEAR) %>%
+      dplyr::mutate(YEAR = MEASYEAR) %>%
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
       dtplyr::lazy_dt() %>%
       dplyr::group_by(!!!grpSyms, PLT_CN) %>%

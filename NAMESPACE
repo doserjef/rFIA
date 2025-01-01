@@ -21,6 +21,7 @@ export(volume)
 export(seedling)
 export(invasive)
 export(dwm)
+export(standStruct)
 
 
 import(bit64)

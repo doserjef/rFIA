@@ -218,7 +218,7 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Diversity estimates
     t <- data %>% 
       # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::rename(YEAR = MEASYEAR) %>% 
+      dplyr::mutate(YEAR = MEASYEAR) %>% 
       dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
       dtplyr::lazy_dt() %>% 
       dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
@@ -260,7 +260,7 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Tree list
     t <- data %>% 
       dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
-      dplyr::rename(AREA_BASIS = PROP_BASIS) %>%
+      dplyr::mutate(AREA_BASIS = PROP_BASIS) %>%
       dplyr::group_by(PLT_CN, CONDID, !!!grpSyms, CONDPROP_UNADJ, aDI, AREA_BASIS) %>%
       dplyr::summarize(H = divIndex(grp, state  * tDI, index = 'H'),
                        S = divIndex(grp, state * tDI, index = 'S'),

@@ -217,7 +217,7 @@ invasiveStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Areal invasive coverage
     t <- data %>% 
       # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::rename(YEAR = MEASYEAR) %>% 
+      dplyr::mutate(YEAR = MEASYEAR) %>% 
       dplyr::filter(!is.na(SYMBOL)) %>%
       dplyr::distinct(PLT_CN, CONDID, SUBP, VEG_SPCD, .keep_all = TRUE) %>% 
       dtplyr::lazy_dt() %>% 
@@ -268,7 +268,7 @@ invasiveStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       dplyr::summarize(cover = sum(COVER_PCT / 100 * SUBPCOND_PROP * aDI * CONDPROP_UNADJ, 
                                    na.rm = TRUE) / 4) %>%
       dplyr::ungroup() %>%
-      dplyr::rename(AREA_BASIS = PROP_BASIS) %>%
+      dplyr::mutate(AREA_BASIS = PROP_BASIS) %>%
       as.data.frame()
 
     # Sum variable(s) up to plot-level and adjust for non-response

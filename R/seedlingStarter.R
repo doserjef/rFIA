@@ -217,7 +217,7 @@ seedlingStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
     t <- data %>% 
       # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::rename(YEAR = MEASYEAR) %>% 
+      dplyr::mutate(YEAR = MEASYEAR) %>% 
       dplyr::distinct(PLT_CN, SUBP, SPCD, .keep_all = TRUE) %>% 
       dtplyr::lazy_dt() %>% 
       dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
