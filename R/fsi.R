@@ -163,7 +163,7 @@ fsiStarter <- function(x,
   ## the number of plots within a panel within an stratum is less than 2. When
   ## this happens, merge strata so that all have at least two obs
   if (str_to_upper(method) != 'TI') {
-    pops <- mergeSmallStrata_old(db, pops)
+    pops <- mergeSmallStrata(db, pops)
   }
 
 
@@ -350,7 +350,8 @@ If not already installed, you can install JAGS from SourceForge:
 
   ## Bring the results back
   out <- unlist(out, recursive = FALSE)
-  if (remote) out <- dropStatesOutsidePolys(out)
+  # TODO: 
+  # if (remote) out <- dropStatesOutsidePolys(out)
   t <- bind_rows(out[names(out) == 't'])
   t1 <- bind_rows(out[names(out) == 't1'])
   a <- bind_rows(out[names(out) == 'a'])
