@@ -171,7 +171,7 @@ areaChangeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # diversion and reversion.
     dplyr::filter(sp == 1) %>%
     # Drop visits not used in our eval of interest
-    dplyr::filter(PLT_CN %in% c(keepThese$PLT_CN, keepThese$PREV_PLT_CN))
+    dplyr::filter(PLT_CN %in% !!c(keepThese$PLT_CN, keepThese$PREV_PLT_CN))
 
   # COND ------------------------------
   db$COND <- db$COND %>%
