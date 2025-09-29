@@ -225,7 +225,6 @@ areaChangeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
   # Full condition list ---------------------------------------------------
   data <- db$PLOT %>%
-    dtplyr::lazy_dt() %>%
     dplyr::filter(PLT_CN %in% keepThese$PLT_CN) %>%
     dplyr::left_join(db$COND, by = c('PLT_CN')) %>%
     dplyr::left_join(db$TREE, by = c('PLT_CN', 'CONDID')) %>%

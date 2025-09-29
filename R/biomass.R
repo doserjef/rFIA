@@ -6,7 +6,7 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     treeList = FALSE, component = 'AG', bioMethod = 'NSVB', 
                     nCores = 1) {
 
-# Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
+  # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
   areaDomain <- rlang::enquo(areaDomain)
   treeDomain <- rlang::enquo(treeDomain)

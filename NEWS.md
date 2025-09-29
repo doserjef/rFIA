@@ -1,6 +1,7 @@
 # rFIA v1.1.2
 
 + Updated all estimation functions to allow grouping by variables in the `PLOTGEOM` database table within the `grpBy` argument. Also changed `readFIA()` to by default read in `PLOTGEOM` as one of the common database tables. Thanks to Jacob Fraser for the suggestion [here](https://github.com/doserjef/rFIA/issues/55).
++ [Fixed a bug](https://github.com/doserjef/rFIA/pull/58) with `dtplyr 1.3.2` that led to an error in `areaChange()` 
 
 
 # rFIA v1.1.1
