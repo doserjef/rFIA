@@ -1,3 +1,7 @@
+# rFIA v1.1.2.9000
+
++ Updated the `biomass()` function to fix a bug in reported estimates when `component = 'TOTAL'`. There was a mismatch in what was reported between the documentation and the function output. The esitmate provided simply added up all biomass across the different components provided by `biomass()`, which did not make much sense since the different components are not mutually exclusive. This is now fixed such that `component = 'TOTAL'` provides biomass estimates equal to the sum of ROOT, STEM, STEM_BARK, BRANCH, and FOLIAGE components. Apologies for the inconvience this error may have caused.  
+
 # rFIA v1.1.2
 
 + Updated all estimation functions to allow grouping by variables in the `PLOTGEOM` database table within the `grpBy` argument. Also changed `readFIA()` to by default read in `PLOTGEOM` as one of the common database tables. Thanks to Jacob Fraser for the suggestion [here](https://github.com/doserjef/rFIA/issues/55).

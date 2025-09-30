@@ -98,12 +98,13 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     grpBy <- c('pltID', grpBy)
   }
 
-  # When component TOTAL, replace with component names
+  # When component TOTAL, replace with component names. 
+  # Note that you only grab the components that are needed 
+  # to sum to total biomass. 
   component <- stringr::str_to_upper(unique(component))
   if ('TOTAL' %in% component | byComponent) {
     component <- c('STEM', 'STEM_BARK', 'BRANCH', 'FOLIAGE', 
-                   'STUMP', 'STUMP_BARK', 'BOLE', 'BOLE_BARK', 
-                   'SAWLOG', 'SAWLOG_BARK', 'ROOT')
+                   'ROOT')
   }
 
   # Intersect plots with polygons if polygons are given
