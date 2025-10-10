@@ -347,7 +347,6 @@ If not already installed, you can install JAGS from SourceForge:
           grpSyms <- syms(grpBy[grpBy %in% c('YEAR', 'INVYR', 'MEASYEAR', 'PLOT_STATUS_CD') == FALSE])
 
           dat <- tOut %>%
-            lazy_dt() %>%
             left_join(wgts, by = c('PLT_CN')) %>%
             filter(series <= nRems[i] & n >= nRems[i]) %>%
             group_by(!!!grpSyms) %>%
@@ -373,7 +372,8 @@ If not already installed, you can install JAGS from SourceForge:
         ## Update columns in tEst
         tOut <- tOut %>%
           ungroup() %>%
-          select(-c(PREV_RD:CURR_BAA, REMPER, PLOT_STATUS_CD)) %>%
+          # TODO: the minus FSI was added to eliminate problems when byPlot = TRUE. Need more debugging.
+          select(-c(PREV_RD:CURR_BAA, REMPER, PLOT_STATUS_CD, FSI)) %>%
           left_join(dat, by = c('PLT_CN', grpBy[!c(grpBy %in% c('YEAR', 'INVYR', 'MEASYEAR', 'PLOT_STATUS_CD'))])) %>%
           mutate(PERC_FSI = FSI / PREV_RD * 100)
         }
