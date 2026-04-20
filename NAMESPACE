@@ -31,7 +31,6 @@ export(fsi)
 export(areaChange)
 
 
-import(bit64)
 import(dplyr)
 import(dtplyr)
 import(ggplot2)
