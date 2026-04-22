@@ -1,8 +1,7 @@
-
 # Startup message ---------------------
 .onAttach <- function(lib, pkg) {
   if(interactive() || getOption("verbose"))
-    packageStartupMessage(sprintf("Package %s (%s) loaded. Check out our website at https://rfia.netlify.app/.\nType citation(\"%s\") for examples of how to cite rFIA.\n", pkg,
+    packageStartupMessage(sprintf("Package %s (%s) loaded. Check out our website at https://doserlab.com/files/rfia/.\nType citation(\"%s\") for examples of how to cite rFIA.\n", pkg,
                                   packageDescription(pkg)$Version, pkg))
 }
 
@@ -64,7 +63,7 @@ arealSumPrep1 <- function(polys){
 }
 
 # Do the spatial intersection of plots w/ polgyons
-arealSumPrep2 <- function(db, grpBy, polys, nCores, remote){
+arealSumPrep2 <- function(db, grpBy, polys, nCores, remote) {
 
   # Make plot data spatial, projected same as polygon layer
   pltSF <- dplyr::select(db$PLOT, c('LON', 'LAT', pltID)) %>%
@@ -84,7 +83,7 @@ arealSumPrep2 <- function(db, grpBy, polys, nCores, remote){
   polyList <- split(polys, as.factor(polys$polyID))
   suppressWarnings({suppressMessages({
     # Compute estimates in parallel -- Clusters in windows, forking otherwise
-    if (Sys.info()['sysname'] == 'Windows'){
+    if (Sys.info()['sysname'] == 'Windows') {
       cl <- parallel::makeCluster(nCores)
       parallel::clusterEvalQ(cl, {
         library(dplyr)
@@ -132,7 +131,7 @@ dropStatesOutsidePolys <- function(x) {
 }
 
 # Helper function to read remote database by state within estimator functions
-readRemoteHelper <- function(x, db, remote, reqTables, nCores){
+readRemoteHelper <- function(x, db, remote, reqTables, nCores) {
   if (remote) {
     # Store the original parameters here
     params <- db
@@ -573,7 +572,8 @@ handlePops <- function(db, evalType, method, mr, pltList = NULL, ga = FALSE) {
       dplyr::ungroup()
   }
 
-  # Dropping non-sampled plots for P3 variables
+  # Dropping non-sampled plots for P3 variables, or dropping plots that don't 
+  # have a remeasurement. 
   if (!is.null(pltList)) {
     pops <- pops %>%
       dplyr::filter(pops$PLT_CN %in% pltList)
@@ -583,6 +583,9 @@ handlePops <- function(db, evalType, method, mr, pltList = NULL, ga = FALSE) {
   # within individual strata and est units are related to different INVYRs
 
   # Only run if this wasn't already done in clipFIA
+  # Calculate the number of P2 plots within each stratum and INVYR to get the number within 
+  # a given stratum. Then also sum across stratum, INVYR, and ESTN_UNIT to get the number
+  # within a given est unit and INVYR. 
   if (!any(c('P2PNTCNT_EU_INVYR', 'P2POINTCNT_INVYR') %in% names(pops)) & method != 'TI') {
     pops <- pops %>%
       dplyr::left_join(select(db$PLOT, PLT_CN, INVYR), by = 'PLT_CN') %>%
@@ -596,6 +599,7 @@ handlePops <- function(db, evalType, method, mr, pltList = NULL, ga = FALSE) {
       dplyr::mutate(P2PNTCNT_EU_INVYR = dplyr::n()) %>%
       dplyr::ungroup() %>%
       as.data.frame() %>%
+      # Also get P1 values by estimation unit and strata. 
       dplyr::left_join(dplyr::select(db$POP_ESTN_UNIT, ESTN_UNIT_CN = CN, P1PNTCNT_EU), by = 'ESTN_UNIT_CN') %>%
       dplyr::left_join(dplyr::select(db$POP_STRATUM, STRATUM_CN = CN, P1POINTCNT), by = 'STRATUM_CN')
   }
@@ -611,309 +615,36 @@ handlePops <- function(db, evalType, method, mr, pltList = NULL, ga = FALSE) {
 
 }
 
-handlePops_old <- function(db, evalType, method, mr, pltList = NULL, ga = FALSE){
-
-  if (ga){
-    ## What years are growth accounting years --> not all filled in
-    ga <- db$POP_EVAL %>%
-      group_by(END_INVYR) %>%
-      summarize(ga = if_else(any(GROWTH_ACCT == 'Y'), 1, 0))
-
-    ### Snag the EVALIDs that are needed
-    db$POP_EVAL  <- db$POP_EVAL %>%
-      left_join(ga, by = 'END_INVYR') %>%
-      select('CN', 'END_INVYR', 'EVALID', 'ESTN_METHOD', 'GROWTH_ACCT', 'ga', STATECD) %>%
-      left_join(select(db$POP_EVAL_TYP, c('EVAL_CN', 'EVAL_TYP')), by = c('CN' = 'EVAL_CN')) %>%
-      filter(EVAL_TYP %in% c('EXPGROW', 'EXPMORT', 'EXPREMV')) %>%
-      filter(!is.na(END_INVYR) & !is.na(EVALID) & END_INVYR >= 2003) %>%
-      distinct(END_INVYR, EVALID, .keep_all = TRUE)
-    gaVars <- c('GROWTH_ACCT')
-  } else {
-    ### Snag the EVALIDs that are needed
-    db$POP_EVAL<- db$POP_EVAL %>%
-      select('CN', 'END_INVYR', 'EVALID', 'ESTN_METHOD', STATECD) %>%
-      inner_join(select(db$POP_EVAL_TYP, c('EVAL_CN', 'EVAL_TYP')), by = c('CN' = 'EVAL_CN')) %>%
-      filter(EVAL_TYP %in% evalType) %>%
-      filter(!is.na(END_INVYR) & !is.na(EVALID) & END_INVYR >= 2003) %>%
-      distinct(END_INVYR, EVALID, .keep_all = TRUE)
-    gaVars <- NULL
-  }
-
-
-  ## If a most-recent subset, make sure that we don't get two reporting years in
-  ## western states
-  if (mr) {
-    db$POP_EVAL <- db$POP_EVAL %>%
-      group_by(EVAL_TYP, STATECD) %>%
-      filter(END_INVYR == max(END_INVYR, na.rm = TRUE)) %>%
-      ungroup()
-  }
-
-
-  ## Cut STATECD
-  db$POP_EVAL <- select(db$POP_EVAL, -c(STATECD))
-
-  ### The population tables
-  pops <- select(db$POP_EVAL, c('EVALID', 'ESTN_METHOD', 'CN', 'END_INVYR', 'EVAL_TYP', any_of(gaVars))) %>%
-    rename(EVAL_CN = CN) %>%
-    left_join(select(db$POP_ESTN_UNIT, c('CN', 'EVAL_CN', 'AREA_USED', 'P1PNTCNT_EU', any_of(c('p2eu', 'nStrata')))), by = c('EVAL_CN')) %>%
-    rename(ESTN_UNIT_CN = CN) %>%
-    left_join(select(db$POP_STRATUM, c('ESTN_UNIT_CN', 'EXPNS', 'P2POINTCNT', 'CN', 'P1POINTCNT', 'ADJ_FACTOR_SUBP', 'ADJ_FACTOR_MICR', "ADJ_FACTOR_MACR")), by = c('ESTN_UNIT_CN')) %>%
-    rename(STRATUM_CN = CN) %>%
-    distinct(EVALID, ESTN_UNIT_CN, STRATUM_CN, .keep_all = TRUE) %>%
-    left_join(select(db$POP_PLOT_STRATUM_ASSGN, c('STRATUM_CN', 'PLT_CN', 'INVYR', 'STATECD',
-                                                  any_of(c('p2eu_INVYR', 'nStrata_INVYR', 'P2POINTCNT_INVYR')))), by = 'STRATUM_CN') %>%
-    distinct(EVALID, ESTN_UNIT_CN, STRATUM_CN, PLT_CN, .keep_all = TRUE) %>%
-    ungroup() %>%
-    mutate_if(is.factor,
-              as.character) %>%
-    rename(YEAR = END_INVYR)
-
-  ## Dropping non-sampled plots for P3 variables
-  if (!is.null(pltList)) {
-    pops <- pops %>%
-      filter(pops$PLT_CN %in% pltList)
-  }
-
-  ## P2POINTCNT column is NOT consistent for annual estimates, plots
-  ## within individual strata and est units are related to different INVYRs
-
-  ## Only run if this wasn't already done in clipFIA
-  if (!any(c('p2eu', 'p2eu_INVYR', 'P2POINTCNT_INVYR') %in% names(pops))) {
-    pops <- pops %>%
-      ## Count of plots by Stratum/INVYR
-      group_by(EVALID, ESTN_UNIT_CN, STRATUM_CN, INVYR) %>%
-      mutate(P2POINTCNT_INVYR = n()) %>%
-      ## By unit / INVYR
-      group_by(EVALID, ESTN_UNIT_CN, INVYR) %>%
-      mutate(p2eu_INVYR = n()) %>%
-      ## By unit for entire cycle
-      group_by(EVALID, ESTN_UNIT_CN) %>%
-      mutate(p2eu = n()) %>%
-      ungroup()
-
-  }
-
-
-  ## Recode a few of the estimation methods to make things easier below
-  pops$ESTN_METHOD = recode(.x = pops$ESTN_METHOD,
-                            `Post-Stratification` = 'strat',
-                            `Stratified random sampling` = 'strat',
-                            `Double sampling for stratification` = 'double',
-                            `Simple random sampling` = 'simple',
-                            `Subsampling units of unequal size` = 'simple')
-
-  return(pops)
-
-}
-
-# TODO: need to go through these, and also determine if fsi() should be using 
-#       mergeSmallstrata_old or the new version.
 # When something other than temporally indifferent is used, we may need to merge small strata
 # There is no great way to go about this, but very important we do it for variance issues.
 # So, what we will do is:
 # (1) Identify strata/INVYR pairs with less than 2 ground plots
 # (2) For each of those pairs, identify their most similar neighbor based on fuzzy string 
 #     matching of STRATUM Descriptions. Neighbors (other strata) must be from the same 
-#     estimation unit and measured in the same year (INVYR). If no neighbors exist, 
-#     i.e., the small stratum was the only one measured in a given INVYR
-## Important -- we are effectively allowing for stratification to vary across panels within an inventory cycle.
-##              Also, we are adjusting strata weights by INVYR within the cycle, i.e., the same stratum may be
-##              weighted differently in different years within the same cycle
+#     estimation unit and measured in the same year (INVYR).
+# Important -- we are effectively allowing for stratification to vary across 
+# panels within an inventory cycle. Also, we are adjusting strata weights by 
+# INVYR within the cycle, i.e., the same stratum may be weighted differently in 
+# different years within the same cycle.
 
-mergeSmallStrata_old <- function(db, pops) {
-
-  ## Make a unique ID for stratum / year pairs
-  pops$stratID <- paste(pops$STRATUM_CN, pops$INVYR, sep = '_')
-  ## We'll allow strata weights to vary by INVYR w/ same strata because not all
-  ## strata are sampled in a given year
-  pops$P1POINTCNT_INVYR <- pops$P1POINTCNT
-
-  if (any(c('nStrata', 'nStrata_INVYR') %in% names(pops))) {
-    ## Stratum year pairs
-    stratYr <- pops %>%
-      left_join(select(db$POP_STRATUM, CN, STRATUM_DESCR), by = c('STRATUM_CN' = 'CN')) %>%
-      distinct(STATECD, ESTN_UNIT_CN, STRATUM_CN, STRATUM_DESCR, INVYR,
-               P2POINTCNT, P1POINTCNT, P2POINTCNT_INVYR, P1POINTCNT_INVYR, stratID,
-               nStrata, nStrata_INVYR) %>%
-      ## If buffer is present in the name, then the stratum has a different intensity
-      ## than other strata in the same estimation unit (PNW only).
-      ## Only combine buffer w/ buffer
-      mutate(buff = str_detect(STRATUM_DESCR, 'buff') & STATECD %in% c(53, 41, 6)) %>%
-      mutate(wrong = P2POINTCNT_INVYR < 2) %>%
-      arrange(P2POINTCNT_INVYR)
-  } else {
-    ## Stratum year pairs
-    stratYr <- pops %>%
-      left_join(select(db$POP_STRATUM, CN, STRATUM_DESCR), by = c('STRATUM_CN' = 'CN')) %>%
-      distinct(STATECD, ESTN_UNIT_CN, STRATUM_CN, STRATUM_DESCR, INVYR,
-               P2POINTCNT, P1POINTCNT, P2POINTCNT_INVYR, P1POINTCNT_INVYR, stratID) %>%
-      ## If buffer is present in the name, then the stratum has a different intensity
-      ## than other strata in the same estimation unit (PNW only).
-      ## Only combine buffer w/ buffer
-      mutate(buff = str_detect(STRATUM_DESCR, 'buf|int') & STATECD %in% c(53, 41, 6)) %>%
-      mutate(wrong = P2POINTCNT_INVYR < 2) %>%
-      group_by(ESTN_UNIT_CN, INVYR) %>%
-      mutate(nStrata_INVYR = length(unique(STRATUM_CN))) %>%
-      group_by(ESTN_UNIT_CN) %>%
-      mutate(nStrata = length(unique(STRATUM_CN))) %>%
-      ungroup() %>%
-      arrange(P2POINTCNT_INVYR)
-  }
-
-
-  ## Check if any fail
-  warnMe <- c()
-
-  ## If any are too small, i.e., only one plot --> do some merging
-  if (sum(stratYr$wrong, na.rm = TRUE) > 0){
-
-    for ( i in stratYr$stratID[stratYr$wrong == 1] ) {
-
-      ## Subset the row
-      dat <- filter(stratYr, stratID == i)
-
-
-      ## Use fuzzy string matching if any other strata are available to merge with
-      if (dat$nStrata_INVYR > 1) {
-        ## Find its nearest neighbor of those in the same estimation
-        ## unit and INVYR
-        neighbors <- stratYr %>%
-          filter(ESTN_UNIT_CN == dat$ESTN_UNIT_CN) %>%
-          #filter(buff == dat$buff) %>%
-          filter(INVYR == dat$INVYR) %>%
-          filter(stratID != i)
-
-        if (nrow(neighbors) < 1) {
-          warnMe <- c(warnMe, TRUE)
-
-        } else {
-          warnMe <- c(warnMe, FALSE)
-
-          ## Find the most similar neighbor in terms of stratum description
-          msn <- adist(dat$STRATUM_DESCR, neighbors$STRATUM_DESCR)
-          msnID <- neighbors$stratID[which.min(msn)]
-
-
-          ## In pops, we want to update all rows of the giving and receiving strata
-          ## Where giving gets a change in STRATUM_CN, P1POINTCNT, and P2POINTCNT
-
-          ## Giving stratum ----------------------------------------------------
-          pops[pops$stratID == i, 'STRATUM_CN'] <- unique(pops[pops$stratID == msnID, 'STRATUM_CN'])
-          pops[pops$stratID == i, 'P1POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P1POINTCNT_INVYR']) + dat$P1POINTCNT_INVYR
-          pops[pops$stratID == i, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
-          #pops[pops$stratID == i, 'stratID'] <- unique(pops[pops$stratID == msnID, 'stratID'])
-
-
-          ## Receiving stratum -------------------------------------------------
-          pops[pops$stratID == msnID, 'P1POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P1POINTCNT_INVYR']) + dat$P1POINTCNT_INVYR
-          pops[pops$stratID == msnID, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
-
-        }
-
-
-
-
-        ## If the small stratum is the only one available in the estimation unit in a given year,
-        ## merge the INVYR within the same stratum
-      } else {
-
-        ## No other strata measured in the same year, so merge years instead
-        neighbors <- stratYr %>%
-          filter(STRATUM_CN == dat$STRATUM_CN) %>%
-          filter(stratID != i)
-
-        if (nrow(neighbors) > 0) {
-          warnMe <- c(warnMe, FALSE)
-
-          ## Find the most similar neighbor in terms of stratum description
-          msn <- abs(neighbors$INVYR - (dat$INVYR + .01))
-          msnID <- neighbors$stratID[which.min(msn)]
-
-          ## Giving stratum ----------------------------------------------------
-          pops[pops$stratID == i, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
-          pops[pops$stratID == i, 'INVYR'] <- unique(pops[pops$stratID == msnID, 'INVYR'])
-          #pops[pops$stratID == i, 'stratID'] <- unique(pops[pops$stratID == msnID, 'stratID'])
-
-
-          ## Receiving stratum -------------------------------------------------
-          pops[pops$stratID == msnID, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
-
-        } else {
-          warnMe <- c(warnMe, TRUE)
-        }
-      }
-    }
-
-    ## Keeps it from repeating above
-    if (any(warnMe)) warning('Bad stratification, i.e., strata too small to compute variance of annual panels. If you are only interested in totals and/or ratio estimates, disregard this. However, if interested in variance (e.g., for confidence intervals) try using method = "TI".')
-
-
-    ## Update adjustment factors in estimation unit
-    pops <- pops %>%
-      distinct(EVALID, ESTN_UNIT_CN, STRATUM_CN, INVYR, PLT_CN, .keep_all = TRUE) %>%
-      ## Fix adjustment factors
-      group_by(STRATUM_CN) %>%
-      mutate(ADJ_FACTOR_MICR = mean(ADJ_FACTOR_MICR, na.rm = TRUE),
-             ADJ_FACTOR_SUBP = mean(ADJ_FACTOR_SUBP, na.rm = TRUE),
-             ADJ_FACTOR_MACR = mean(ADJ_FACTOR_MACR)) %>%
-      ungroup()
-  }
-
-
-  ## Whether any strata are small are not, we will almost surely need to adjust
-  ## strata weights for some INVYRs. Not all stratum are measured in each panel
-  ## within a cycle, and when this happens, we need to weight the observed strata
-  ## higher. If we don't, strata weights will not sum to 1 in some years and we
-  ## will grossly underestimate means/totals in some cases
-  ## Adjust stratum weights when not all strata are sampled in an INVYR
-  stratYr <- pops %>%
-    distinct(ESTN_UNIT_CN, STRATUM_CN, INVYR,
-             P1POINTCNT_INVYR, P1PNTCNT_EU,
-             P2POINTCNT_INVYR) %>%
-    ## If multiple stratum were merged onto one, choose the maximum value (i.e.,
-    ## the result of the last iteration)
-    group_by(ESTN_UNIT_CN, STRATUM_CN, INVYR) %>%
-    mutate(P1POINTCNT_INVYR = max(P1POINTCNT_INVYR),
-           P2POINTCNT_INVYR = max(P2POINTCNT_INVYR)) %>%
-    distinct() %>%
-    mutate(stratWgt = P1POINTCNT_INVYR / P1PNTCNT_EU) %>%
-    group_by(ESTN_UNIT_CN, INVYR) %>%
-    mutate(propSampled = sum(stratWgt, na.rm = TRUE),
-           stratWgt_INVYR = stratWgt / propSampled,
-           P1POINTCNT_INVYR = P1PNTCNT_EU * stratWgt_INVYR,
-           p2eu_INVYR = sum(P2POINTCNT_INVYR, na.rm = TRUE)) %>%
-    ungroup() %>%
-    select(STRATUM_CN, INVYR, P1POINTCNT_INVYR, P2POINTCNT_INVYR, p2eu_INVYR)
-
-  pops <- pops %>%
-    select(-c(P1POINTCNT_INVYR, stratID, P2POINTCNT_INVYR, p2eu_INVYR)) %>%
-    left_join(stratYr, by = c('STRATUM_CN', 'INVYR')) %>%
-    distinct(EVALID, ESTN_UNIT_CN, STRATUM_CN, PLT_CN, .keep_all = TRUE)
-
-
-  return(pops)
-
-}
-# TODO: need to go through this.
 mergeSmallStrata <- function(db, pops) {
 
   ## Make a unique ID for stratum / year pairs
   pops$stratID <- paste(pops$STRATUM_CN, pops$INVYR, sep = '_')
-  ## We'll allow strata weights to vary by INVYR w/ same strata because not all
-  ## strata are sampled in a given year
+  # We'll allow strata weights to vary by INVYR w/ same strata because not all
+  # strata are sampled in a given year
   pops$P1POINTCNT_INVYR <- pops$P1POINTCNT
 
   if (any(c('nStrata', 'nStrata_INVYR') %in% names(pops))) {
-    ## Stratum year pairs
+    # Stratum year pairs
     stratYr <- pops %>%
       left_join(select(db$POP_STRATUM, CN, STRATUM_DESCR), by = c('STRATUM_CN' = 'CN')) %>%
       distinct(STATECD, ESTN_UNIT_CN, STRATUM_CN, STRATUM_DESCR, INVYR,
                P2POINTCNT, P1POINTCNT, P2POINTCNT_INVYR, P1POINTCNT_INVYR, stratID,
                nStrata, nStrata_INVYR) %>%
-      ## If buffer is present in the name, then the stratum has a different intensity
-      ## than other strata in the same estimation unit (PNW only).
-      ## Only combine buffer w/ buffer
+      # If buffer is present in the name, then the stratum has a different intensity
+      # than other strata in the same estimation unit (PNW only).
+      # Only combine buffer w/ buffer
       mutate(buff = str_detect(STRATUM_DESCR, 'buff') & STATECD %in% c(53, 41, 6)) %>%
       mutate(wrong = P2POINTCNT_INVYR < 2) %>%
       arrange(P2POINTCNT_INVYR)
@@ -923,9 +654,9 @@ mergeSmallStrata <- function(db, pops) {
       left_join(select(db$POP_STRATUM, CN, STRATUM_DESCR), by = c('STRATUM_CN' = 'CN')) %>%
       distinct(STATECD, ESTN_UNIT_CN, STRATUM_CN, STRATUM_DESCR, INVYR,
                P2POINTCNT, P1POINTCNT, P2POINTCNT_INVYR, P1POINTCNT_INVYR, stratID) %>%
-      ## If buffer is present in the name, then the stratum has a different intensity
-      ## than other strata in the same estimation unit (PNW only).
-      ## Only combine buffer w/ buffer
+      # If buffer is present in the name, then the stratum has a different intensity
+      # than other strata in the same estimation unit (PNW only).
+      # Only combine buffer w/ buffer
       mutate(buff = str_detect(STRATUM_DESCR, 'buff') & STATECD %in% c(53, 41, 6)) %>%
       mutate(wrong = P2POINTCNT_INVYR < 2) %>%
       group_by(ESTN_UNIT_CN, INVYR) %>%
@@ -937,25 +668,24 @@ mergeSmallStrata <- function(db, pops) {
   }
 
 
-  ## Check if any fail
+  # Check if any fail
   warnMe <- c()
 
-  ## If any are too small, i.e., only one plot --> do some merging
+  # If any are too small, i.e., only one plot --> do some merging
   if (sum(stratYr$wrong, na.rm = TRUE) > 0){
 
-    for ( i in stratYr$stratID[stratYr$wrong == 1] ) {
+    for (i in stratYr$stratID[stratYr$wrong == 1]) {
 
-      ## Subset the row
+      # Subset the row
       dat <- filter(stratYr, stratID == i)
 
 
-      ## Use fuzzy string matching if any other strata are available to merge with
+      # Use fuzzy string matching if any other strata are available to merge with
       if (dat$nStrata_INVYR > 1) {
-        ## Find its nearest neighbor of those in the same estimation
-        ## unit and INVYR
+        # Find its nearest neighbor of those in the same estimation
+        # unit and INVYR
         neighbors <- stratYr %>%
           filter(ESTN_UNIT_CN == dat$ESTN_UNIT_CN) %>%
-          #filter(buff == dat$buff) %>%
           filter(INVYR == dat$INVYR) %>%
           filter(stratID != i)
 
@@ -965,22 +695,20 @@ mergeSmallStrata <- function(db, pops) {
         } else {
           warnMe <- c(warnMe, FALSE)
 
-          ## Find the most similar neighbor in terms of stratum description
+          # Find the most similar neighbor in terms of stratum description
           msn <- adist(dat$STRATUM_DESCR, neighbors$STRATUM_DESCR)
           msnID <- neighbors$stratID[which.min(msn)]
 
 
-          ## In pops, we want to update all rows of the giving and receiving strata
-          ## Where giving gets a change in STRATUM_CN, P1POINTCNT, and P2POINTCNT
+          # In pops, we want to update all rows of the giving and receiving strata
+          # Where giving gets a change in STRATUM_CN, P1POINTCNT, and P2POINTCNT
 
-          ## Giving stratum ----------------------------------------------------
+          # Giving stratum ----------------------------------------------------
           pops[pops$stratID == i, 'STRATUM_CN'] <- unique(pops[pops$stratID == msnID, 'STRATUM_CN'])
           pops[pops$stratID == i, 'P1POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P1POINTCNT_INVYR']) + dat$P1POINTCNT_INVYR
           pops[pops$stratID == i, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
-          #pops[pops$stratID == i, 'stratID'] <- unique(pops[pops$stratID == msnID, 'stratID'])
 
-
-          ## Receiving stratum -------------------------------------------------
+          # Receiving stratum -------------------------------------------------
           pops[pops$stratID == msnID, 'P1POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P1POINTCNT_INVYR']) + dat$P1POINTCNT_INVYR
           pops[pops$stratID == msnID, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
 
@@ -989,11 +717,11 @@ mergeSmallStrata <- function(db, pops) {
 
 
 
-        ## If the small stratum is the only one available in the estimation unit in a given year,
-        ## merge the INVYR within the same stratum
+        # If the small stratum is the only one available in the estimation unit in a given year,
+        # merge the INVYR within the same stratum
       } else {
 
-        ## No other strata measured in the same year, so merge years instead
+        # No other strata measured in the same year, so merge years instead
         neighbors <- stratYr %>%
           filter(STRATUM_CN == dat$STRATUM_CN) %>%
           filter(stratID != i)
@@ -1001,17 +729,16 @@ mergeSmallStrata <- function(db, pops) {
         if (nrow(neighbors) > 0) {
           warnMe <- c(warnMe, FALSE)
 
-          ## Find the most similar neighbor in terms of stratum description
+          # Find the most similar neighbor in terms of INVYR
           msn <- abs(neighbors$INVYR - (dat$INVYR + .01))
           msnID <- neighbors$stratID[which.min(msn)]
 
-          ## Giving stratum ----------------------------------------------------
+          # Giving stratum ----------------------------------------------------
           pops[pops$stratID == i, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
           pops[pops$stratID == i, 'INVYR'] <- unique(pops[pops$stratID == msnID, 'INVYR'])
-          #pops[pops$stratID == i, 'stratID'] <- unique(pops[pops$stratID == msnID, 'stratID'])
 
 
-          ## Receiving stratum -------------------------------------------------
+          # Receiving stratum -------------------------------------------------
           pops[pops$stratID == msnID, 'P2POINTCNT_INVYR'] <- unique(pops[pops$stratID == msnID, 'P2POINTCNT_INVYR']) + dat$P2POINTCNT_INVYR
 
         } else {
@@ -1020,14 +747,14 @@ mergeSmallStrata <- function(db, pops) {
       }
     }
 
-    ## Keeps it from repeating above
+    # Keeps it from repeating above
     if (any(warnMe)) warning('Bad stratification, i.e., strata too small to compute variance of annual panels. If you are only interested in totals and/or ratio estimates, disregard this. However, if interested in variance (e.g., for confidence intervals) try using method = "TI".')
 
 
-    ## Update adjustment factors in estimation unit
+    # Update adjustment factors in estimation unit
     pops <- pops %>%
       distinct(EVALID, ESTN_UNIT_CN, STRATUM_CN, INVYR, PLT_CN, .keep_all = TRUE) %>%
-      ## Fix adjustment factors
+      # Fix adjustment factors
       group_by(STRATUM_CN) %>%
       mutate(ADJ_FACTOR_MICR = mean(ADJ_FACTOR_MICR, na.rm = TRUE),
              ADJ_FACTOR_SUBP = mean(ADJ_FACTOR_SUBP, na.rm = TRUE),
@@ -1036,22 +763,24 @@ mergeSmallStrata <- function(db, pops) {
   }
 
 
-  ## Whether any strata are small are not, we will almost surely need to adjust
-  ## strata weights for some INVYRs. Not all stratum are measured in each panel
-  ## within a cycle, and when this happens, we need to weight the observed strata
-  ## higher. If we don't, strata weights will not sum to 1 in some years and we
-  ## will grossly underestimate means/totals in some cases
-  ## Adjust stratum weights when not all strata are sampled in an INVYR
+  # Whether any strata are small are not, we will almost surely need to adjust
+  # strata weights for some INVYRs. Not all stratum are measured in each panel
+  # within a cycle, and when this happens, we need to weight the observed strata
+  # higher. If we don't, strata weights will not sum to 1 in some years and we
+  # will grossly underestimate means/totals in some cases
+  # Adjust stratum weights when not all strata are sampled in an INVYR
   stratYr <- pops %>%
     distinct(ESTN_UNIT_CN, STRATUM_CN, INVYR,
              P1POINTCNT_INVYR, P1PNTCNT_EU,
              P2POINTCNT_INVYR) %>%
-    ## If multiple stratum were merged onto one, choose the maximum value (i.e.,
-    ## the result of the last iteration)
+    # If multiple stratum were merged onto one, choose the maximum value (i.e.,
+    # the result of the last iteration)
     group_by(ESTN_UNIT_CN, STRATUM_CN, INVYR) %>%
     mutate(P1POINTCNT_INVYR = max(P1POINTCNT_INVYR),
            P2POINTCNT_INVYR = max(P2POINTCNT_INVYR)) %>%
     distinct() %>%
+    # Note this is grouped by ESTN_UNIT_CN and STRATUM_CN since the last group_by
+    # will drop INVYR. 
     mutate(stratWgt = P1POINTCNT_INVYR / P1PNTCNT_EU) %>%
     group_by(ESTN_UNIT_CN, INVYR) %>%
     mutate(propSampled = sum(stratWgt, na.rm = TRUE),
@@ -1074,7 +803,7 @@ mergeSmallStrata <- function(db, pops) {
 # For annual estimator, we use the most recent stratification for all years.
 # Otherwise we won't be able to compute the covariance between panels, because
 # stratum boundaries and assignments differ from year to year.
-# TODO: need to go through this.
+# TODO:
 annualStrataHelper <- function(db, pops) {
 
 
@@ -1298,7 +1027,7 @@ annualStrataHelper <- function(db, pops) {
 }
 
 
-# TODO: go through this
+# TODO: 
 ## Moving average weights
 maWeights <- function(pops, method, lambda){
 
@@ -1383,8 +1112,7 @@ combineMR <- function(x){
   return(out)
 }
 
-# TODO: this is only used in fsi(). It need to consider whether to keep it or remove
-#       it. If keeping it, you'll probably need to handle the "geometry". 
+# TODO: should just be able to delete this. 
 # Make implicit NA explicit for spatial summaries
 prettyNamesSF <- function (tOut, polys, byPlot, grpBy, grpByOrig, tNames, returnSpatial) {
 
@@ -1417,7 +1145,7 @@ prettyNamesSF <- function (tOut, polys, byPlot, grpBy, grpByOrig, tNames, return
   return(tOut)
 }
 
-# TODO: go through
+# TODO: 
 ## Choose annual panels to return
 filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
 
@@ -1470,7 +1198,7 @@ skewness <- function(x, na.rm = TRUE){
   return(skew)
 }
 
-# TODO: go through
+# TODO: 
 projectPnts <- function(x, y, slope = NULL, yint = NULL){
   if (is.null(slope)){
     P = data.frame(xOrig = x, yOrig = y)
@@ -1493,7 +1221,7 @@ projectPnts <- function(x, y, slope = NULL, yint = NULL){
   return(P)
 }
 
-# TODO: go through
+# TODO: 
 projectPoints <- function(x, y, slope = 1, yint = 0, returnPoint = TRUE){
   ## Solve for 1:1 line by default
 
@@ -1516,7 +1244,7 @@ projectPoints <- function(x, y, slope = 1, yint = 0, returnPoint = TRUE){
   return(out)
 }
 
-# TODO: go through
+# TODO: 
 #### SHANNON'S EVENESS INDEX (H)
 #
 # speciesObs: vector of observations (species or unique ID)
@@ -1562,7 +1290,6 @@ divIndex <- function(SPCD, TPA, index) {
   return(value)
 }
 
-# TODO: go through.
 areal_par <- function(x, pltSF, polys) {
   pltSF <- sf::st_intersection(pltSF, polys[[x]]) %>%
     as.data.frame() %>%
@@ -1633,7 +1360,7 @@ structHelper <- function(dia, crownClass){
 }
 
 
-# TODO: go through
+# TODO:
 # Prop basis helper
 adjHelper <- function(DIA, MACRO_BREAKPOINT_DIA, ADJ_FACTOR_MICR, ADJ_FACTOR_SUBP, ADJ_FACTOR_MACR){
   # IF it doesnt exist make it massive
@@ -1649,7 +1376,7 @@ adjHelper <- function(DIA, MACRO_BREAKPOINT_DIA, ADJ_FACTOR_MICR, ADJ_FACTOR_SUB
 
 }
 
-# TODO: go through
+# TODO: 
 # GRM adjustment helper
 grmAdj <- function(subtyp, adjMicr, adjSubp, adjMacr) {
 
@@ -1666,7 +1393,7 @@ grmAdj <- function(subtyp, adjMicr, adjSubp, adjMacr) {
   return(data$adj)
 }
 
-# TODO: go through
+# TODO: 
 # Helper function to compute variance for estimation units (manages different estimation methods)
 unitVarDT <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, stratMean1 = NULL){
   unitM <- unitMean(ESTN_METHOD, a, nh, w, stratMean)
@@ -1686,7 +1413,7 @@ unitVarDT <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, stratMean1 = 
   }
 }
 
-# TODO: go through
+# TODO: 
 unitVar <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, unitM, stratMean1 = NULL, unitM1 = NULL){
   if(method == 'var'){
     uv = ifelse(dplyr::first(ESTN_METHOD) == 'strat',
@@ -1703,7 +1430,7 @@ unitVar <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, unitM, stratMea
   }
 }
 
-# TODO: go through
+# TODO: 
 unitVarNew <- function(method, ESTN_METHOD, a, nh, n, w, v, stratMean, unitM, stratMean1 = NULL, unitM1 = NULL){
   if(method == 'var'){
     uv = ifelse(dplyr::first(ESTN_METHOD) == 'strat',
@@ -1730,7 +1457,7 @@ rVar <- function(x, y, xVar, yVar, xyCov){
   return(rv)
 }
 
-# TODO: go through
+# TODO: 
 # Helper function to compute variance for estimation units (manages different estimation methods)
 unitMean <- function(ESTN_METHOD, a, nh, w, stratMean){
   um = ifelse(dplyr::first(ESTN_METHOD) == 'strat',
@@ -1756,22 +1483,7 @@ vrAttHelper <- function(attribute, attribute.prev, attribute.mid, attribute.beg,
   return(at)
 }
 
-# TODO: go through
-stratVar <- function(ESTN_METHOD, x, xStrat, ndif, a, nh, y = NULL, yStrat = NULL){
-  ## Variance
-  if (is.null(y)){
-    v <- ifelse(dplyr::first(ESTN_METHOD == 'simple'),
-                var(c(x, numeric(ndif)) * dplyr::first(a) / nh),
-                (sum((c(x, numeric(ndif))^2), na.rm = TRUE) - nh * xStrat^2) / (nh * (nh-1)))
-    ## Covariance
-  } else {
-    v <- ifelse(dplyr::first(ESTN_METHOD == 'simple'),
-                cov(x,y),
-                (sum(x*y, na.rm = TRUE) - sum(nh * xStrat * yStrat, na.rm = TRUE)) / (nh * (nh-1)))
-  }
-}
-
-# TODO: compare ratioVar and rVar
+# TODO: 
 ratioVar <- function(x, y, x.var, y.var, cv) {
   r.var <- (1 / (y^2)) * (x.var + ((x/y)^2 * y.var) - (2 * (x/y) * cv) )
   # Sometimes rounding errors in covariance estimate cause slightly negative
@@ -1781,7 +1493,7 @@ ratioVar <- function(x, y, x.var, y.var, cv) {
   return(r.var)
 }
 
-# TODO: go through
+# TODO: 
 sumToPlot <- function(x,
                       pops,
                       grpBy) {
@@ -1868,7 +1580,7 @@ sumToPlot <- function(x,
   return(x)
 }
 
-# TODO: need to go through
+# TODO: 
 sumToEU <- function(db,
                     x,
                     y = NULL,

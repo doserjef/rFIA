@@ -8,3 +8,4 @@ compile
 vignettes/*.html
 vignettes/img/*
 vignettes/white_oak_cache/*
+rFIA.Rproj

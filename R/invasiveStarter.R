@@ -55,7 +55,7 @@ invasiveStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   db$PLOT <- db$PLOT %>%
     dplyr::left_join(db$PLOTGEOM, by = 'CN')
 
-  # Reduce our samle right off the bat, only plots sampled for invasives
+  # Reduce our sample right off the bat, only plots sampled for invasives
   db$PLOT <- db$PLOT %>%
     dplyr::filter(INVASIVE_SAMPLING_STATUS_CD %in% 1:2)
 

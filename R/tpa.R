@@ -21,7 +21,8 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
   # and adds the polyID column giving a unique ID to each areal unit). 
   polys <- arealSumPrep1(polys)
 
-  # Run the main portion of the function
+  # Run the main portion of the function. It's wrapped in lapply for the situation
+  # in which we're working with a remoteDB. 
   out <- lapply(X = iter, FUN = tpaStarter, db, grpBy_quo = grpBy_quo, 
                 polys, returnSpatial, bySpecies, bySizeClass, landType, 
                 treeType, method, lambda, treeDomain, areaDomain, totals, 
