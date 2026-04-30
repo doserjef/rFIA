@@ -34,12 +34,13 @@ getDesignInfo <- function(db,
       stop(paste(paste (as.character(missing.tables), collapse = ', '), 'tables not found in object db.'))
     }
   } else {
-    ## Read the tables we need, readFIA will throw a warning if they are missing
+    # Read the tables we need, readFIA will throw a warning if they are missing
     db <- readFIA(dir = db$dir,
                   con = db$con,
                   schema = db$schema,
                   common = db$common,
-                  tables =  c('PLOT', 'POP_EVAL', 'POP_EVAL_TYP', 'POP_ESTN_UNIT', 'POP_STRATUM', 'POP_PLOT_STRATUM_ASSGN'),
+                  tables =  c('PLOT', 'POP_EVAL', 'POP_EVAL_TYP', 
+                              'POP_ESTN_UNIT', 'POP_STRATUM', 'POP_PLOT_STRATUM_ASSGN'),
                   states = db$states)
   }
 
@@ -47,7 +48,6 @@ getDesignInfo <- function(db,
   if (mostRecent) {
     db <- clipFIA(db)
   }
-
 
   # Fix TX problems with incomplete labeling of E v. W TX
   db <- handleTX(db)

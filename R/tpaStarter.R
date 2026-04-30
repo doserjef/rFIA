@@ -10,7 +10,8 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                  'POP_ESTN_UNIT', 'POP_EVAL', 'POP_STRATUM', 'POP_EVAL_TYP', 
                  'POP_EVAL_GRP', 'PLOTGEOM')
 
-  # If remote, read in state by state. Otherwise, drop all unnecessary tables.
+  # If remote, read in state by state, only the reqTables. 
+  # Otherwise, drop all unnecessary tables.
   db <- readRemoteHelper(x, db, remote, reqTables, nCores)
 
   # If the object was clipped
