@@ -187,7 +187,7 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot) {
       dplyr::summarize(CONDPROP_UNADJ = dplyr::first(CONDPROP_UNADJ * aDI)) %>%
       dplyr::mutate(CONDPROP_UNADJ = tidyr::replace_na(CONDPROP_UNADJ, 0)) %>%
       # Average forested area between min and max date across all remeasurements.
-      dplyr::group_by(pltID, PROP_BASIS, .dots = aGrps) %>%
+      dplyr::group_by(pltID, PROP_BASIS, across(all_of(aGrps))) %>%
       dplyr::summarize(minDate = min(date, na.rm = TRUE),
                        maxDate = max(date, na.rm = TRUE),
                        amin = sum(CONDPROP_UNADJ[date == minDate], na.rm = TRUE),
@@ -451,7 +451,7 @@ fsiHelper2 <- function(x, popState, t, a, grpBy, scaleBy, method, useSeries) {
     as.data.frame() %>%
     
     # Estimation unit
-    dplyr::group_by(ESTN_UNIT_CN, .dots = grpBy) %>%
+    dplyr::group_by(ESTN_UNIT_CN, across(all_of(grpBy))) %>%
     dplyr::summarize(ctEst = unitMean(ESTN_METHOD, a, nh, w, ctStrat),
                      cbEst = unitMean(ESTN_METHOD, a, nh, w, cbStrat),
                      ptEst = unitMean(ESTN_METHOD, a, nh, w, ptStrat),

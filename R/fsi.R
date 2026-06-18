@@ -452,7 +452,7 @@ If not already installed, you can install JAGS from SourceForge:
         dplyr::left_join(wgts, by = joinCols) %>%
         dplyr::mutate(dplyr::across(ctEst:rempEst, ~(.*wgt))) %>%
         dplyr::mutate(dplyr::across(ctVar:cvEst_remp, ~(.*(wgt^2)))) %>%
-        dplyr::group_by(ESTN_UNIT_CN, .dots = grpBy) %>%
+        dplyr::group_by(ESTN_UNIT_CN, across(all_of(grpBy))) %>%
         dplyr::summarize(across(ctEst:plotIn_t, sum, na.rm = TRUE))
       
       # If using an ANNUAL estimator --------------------------------------------
@@ -474,12 +474,12 @@ If not already installed, you can install JAGS from SourceForge:
     ## Totals and ratios -------------------------------------------------------
     # Tree
     tTotal <- tEst %>%
-      dplyr::group_by(.dots = grpBy) %>%
+      dplyr::group_by(across(all_of(grpBy))) %>%
       dplyr::summarize_all(sum, na.rm = TRUE)
     
     suppressWarnings({
       tOut <- tTotal %>%
-        dplyr::group_by(.dots = grpBy) %>%
+        dplyr::group_by(across(all_of(grpBy))) %>%
         dplyr::summarize_all(sum,na.rm = TRUE) %>%
         dplyr::mutate(TPA_RATE = ctEst / ptEst,
                       BA_RATE = cbEst / pbEst,

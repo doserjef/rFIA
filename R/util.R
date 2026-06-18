@@ -1146,10 +1146,10 @@ prettyNamesSF <- function (tOut, polys, byPlot, grpBy, grpByOrig, tNames, return
 }
 
 # TODO: 
-## Choose annual panels to return
+# Choose annual panels to return
 filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
 
-  ## Have to handle statecd carefully in grp by
+  # Have to handle statecd carefully in grp by
   if ('STATECD' %in% grpBy) {
     grpBy <- grpBy[!c(grpBy %in% 'STATECD')]
     x <- x %>%
@@ -1160,28 +1160,25 @@ filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
   x <- x %>%
     dplyr::left_join(dplyr::distinct(dplyr::select(ESTN_UNIT, CN, STATECD)), by = c('ESTN_UNIT_CN' = 'CN')) %>%
     dplyr::mutate(nplts = !!pltquo) %>%
-    dplyr::group_by(STATECD, INVYR, .dots = grpBy[!c(grpBy %in% 'STATECD')]) %>%
+    dplyr::group_by(STATECD, INVYR, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
     dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>% 
     ## Keep these
-    dplyr::group_by(STATECD, INVYR, .dots = grpBy[!c(grpBy %in% 'STATECD')]) %>%
+    dplyr::group_by(STATECD, INVYR, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
     dplyr::mutate(keep = ifelse(INVYR %in% YEAR,
                                 ifelse(YEAR == INVYR, 1, 0), ## When TRUE
                                 ifelse(nplts == max(nplts, na.rm = TRUE), 1, 0))) %>% ## When INVYR not in YEAR, keep estimates from the inventory where panel has the most plots
     dplyr::ungroup() %>%
     dplyr::filter(keep == 1) %>%
-    ## If there are multiple reporting years where a panel has the same number of plots
-    ## then the estimate will be way too big, we fix this by taking the first row from each output group
-    ## If the above worked it will have no effect. If the above failed, it will save our ass.
+    # If there are multiple reporting years where a panel has the same number of plots
+    # then the estimate will be way too big, we fix this by taking the first row from each output group
+    # If the above worked it will have no effect. If the above failed, it will save our ass.
     dplyr::mutate(YEAR = INVYR) %>%
-    dplyr::group_by(STATECD, .dots = grpBy[!c(grpBy %in% 'STATECD')]) %>%
+    dplyr::group_by(STATECD, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
     dplyr::summarize(dplyr::across(.cols = dplyr::everything(), dplyr::first)) %>%
     dplyr::ungroup()
 
   return(x)
 }
-
-
-
 
 # Estimate skewness in a distribution of values
 skewness <- function(x, na.rm = TRUE){
@@ -1750,7 +1747,7 @@ sumToEU <- function(db,
       ## If using an ANNUAL estimator --------------------------------------------
     } else if (stringr::str_to_upper(method) == 'ANNUAL') {
 
-      ## Only needed INVYR for pop est
+      # Only needed INVYR for pop est
       x.grpBy <- x.grpBy[x.grpBy != 'INVYR']
       y.grpBy <- y.grpBy[y.grpBy != 'INVYR']
 

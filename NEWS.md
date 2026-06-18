@@ -1,3 +1,7 @@
+# rFIA v1.1.3.9000
+
++ Removed `.dots` argument from all calls to `dplyr::group_by()`, which resulted in an error with the latest version of `dplyr` (see #54).  
+
 # rFIA v1.1.3
 
 + Substantial updates to the `fsi()` function. Some of these functions fixed some common errors that could be encountered under specific circumstances where the function broke, which happened as a result of updates to FIADB since the last time this function underwent a major update. An additional update fixes an important bug where the `scaleBy` function would not always work as was reported. In particular, under certain situations (namely `byPlot = TRUE`) the subsequent calculations of relative density did not use the level-specific intercepts and slopes that were estimated in the regression model, and instead the overall mean was used (i.e., equivalent to if `scaleBy` was not specified). This could lead to sub-optimal accuracy of the relative density calculations, and in subsequent FSI outputs. Apologies for any problems this may have caused.  
