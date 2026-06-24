@@ -1,6 +1,7 @@
 # rFIA v1.1.3.9000
 
-+ Removed `.dots` argument from all calls to `dplyr::group_by()`, which resulted in an error with the latest version of `dplyr` (see #54).  
++ Removed `.dots` argument from all calls to `dplyr::group_by()`, which resulted in an error with the latest version of `dplyr` (see [#54](https://github.com/doserjef/rFIA/issues/54)).  
++ Removed dependency on the `bit64` package. 
 
 # rFIA v1.1.3
 

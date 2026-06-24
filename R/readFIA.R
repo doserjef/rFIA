@@ -19,6 +19,11 @@ readFIA <- function(dir = NULL,
     stop('Must specify `schema` when reading data from a database connection (`con`).')
   }
 
+  # Give warning if reading in AK
+  if ("AK" %in% states) {
+    warning("Alaska (AK) is included in state list. AK has a unique inventory design that must be handled with caution. rFIA should not be used to work with interior Alaska data, but it can provide valid estimates for coastal Alaska. Many rFIA functions will error when using AK data unless you manually filter the db to solely include coastal Alaska data. Please read this document before proceeding: https://research.fs.usda.gov/sites/default/files/2023-05/pnw-AK_Warning_ReadMe.pdf.")  
+  }
+
   ## Attempt to read from database
   if (!is.null(con)) {
     db <- readFIA.db(con, schema, states, tables, common, inMemory)

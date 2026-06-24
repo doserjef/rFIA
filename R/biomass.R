@@ -140,5 +140,4 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
   }
 
   return(tEst)
-
 }

@@ -113,7 +113,8 @@ getDesignInfo <- function(db,
 
   # Get remaining design info
   strata <- evals %>%
-    # Drop all periodic inventories
+    # Drop all periodic inventories. Note that since YEAR is END_INVYR, this still 
+    # maintains certain plots sampled prior to 2003. 
     dplyr::filter(YEAR >= 2003) %>%
     # Join estimation unit
     dplyr::left_join(dplyr::select(db$POP_ESTN_UNIT, ESTN_UNIT_CN = CN,

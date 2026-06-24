@@ -1145,7 +1145,8 @@ prettyNamesSF <- function (tOut, polys, byPlot, grpBy, grpByOrig, tNames, return
   return(tOut)
 }
 
-# TODO: 
+# TODO: need to update this, its not actually filtering things properly. It doesn't 
+#       result in selecting a bad annual panel, but it may not get the most optimal one. 
 # Choose annual panels to return
 filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
 
@@ -1160,6 +1161,7 @@ filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
   x <- x %>%
     dplyr::left_join(dplyr::distinct(dplyr::select(ESTN_UNIT, CN, STATECD)), by = c('ESTN_UNIT_CN' = 'CN')) %>%
     dplyr::mutate(nplts = !!pltquo) %>%
+    # Grouped by STATECD, INVYR, and YEAR 
     dplyr::group_by(STATECD, INVYR, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
     dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>% 
     ## Keep these
@@ -1176,7 +1178,7 @@ filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
     dplyr::group_by(STATECD, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
     dplyr::summarize(dplyr::across(.cols = dplyr::everything(), dplyr::first)) %>%
     dplyr::ungroup()
-
+  
   return(x)
 }
 

@@ -389,7 +389,7 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       eu.sums <- sumToEU(db, tPlt, aPlt, pops, grpBy, aGrpBy, method, lambda)
       tEst <- eu.sums$x
       aEst <- eu.sums$y
-   
+ 
       out <- list(tEst = tEst, aEst = aEst, grpBy = grpBy, aGrpBy = aGrpBy) 
     } # population or tree-level estimation
   } # Population or plot-level estimation
