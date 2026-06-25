@@ -95,7 +95,7 @@ volume <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     BOLE_CF_TOTAL_VAR, SAW_CF_TOTAL_VAR, SAW_MBF_TOTAL_VAR, AREA_TOTAL_VAR, 
                     BOLE_CF_ACRE_SE, SAW_CF_ACRE_SE, SAW_MBF_ACRE_SE, 
                     BOLE_CF_TOTAL_SE, SAW_CF_TOTAL_SE, SAW_MBF_TOTAL_SE, AREA_TOTAL_SE, 
-                    nPlots_TREE, nPlots_AREA, N)
+                    nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

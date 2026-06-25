@@ -82,7 +82,7 @@ area <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     nPlots_AREA_NUM = nPlots.x,
                     nPlots_AREA_DEN = nPlots.y) %>%
       dplyr::select(!!!grpSyms, PERC_AREA, AREA_TOTAL, PERC_AREA_SE, AREA_TOTAL_SE,
-                    PERC_AREA_VAR, AREA_TOTAL_VAR, nPlots_AREA_NUM, nPlots_AREA_DEN, N)
+                    PERC_AREA_VAR, AREA_TOTAL_VAR, nPlots_AREA_NUM, nPlots_AREA_DEN)
 
     # Drop totals unless told not to
     if (!totals) {

@@ -79,7 +79,7 @@ seedling <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::select(!!!grpSyms, TPA, TREE_TOTAL, AREA_TOTAL, 
                     TPA_VAR, TREE_TOTAL_VAR, AREA_TOTAL_VAR, 
                     TPA_SE, TREE_TOTAL_SE, AREA_TOTAL_SE, 
-                    nPlots_TREE, nPlots_AREA, N)
+                    nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

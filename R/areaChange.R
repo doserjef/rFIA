@@ -83,7 +83,7 @@ areaChange <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::select(!!!grpSyms, PERC_CHNG, AREA_CHNG, PREV_AREA,
                     PERC_CHNG_VAR, AREA_CHNG_VAR, PREV_AREA_VAR,
                     PERC_CHNG_SE, AREA_CHNG_SE, PREV_AREA_SE,
-                    nPlots_AREA, N)
+                    nPlots_AREA)
 
     # Remove variance columns to avoid confusion
     tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]

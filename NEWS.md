@@ -2,6 +2,8 @@
 
 + Removed `.dots` argument from all calls to `dplyr::group_by()`, which resulted in an error with the latest version of `dplyr` (see [#54](https://github.com/doserjef/rFIA/issues/54)).  
 + Removed dependency on the `bit64` package. 
++ Removed `N` from the return output of all model fitting functions as this was not always being properly calculated when different filters were applied. Additionally, we updated our recommended approach for calculating confidence intervals and so this value is no longer part of that recommended calculation. 
++ Removed the argument `variance` from all estimation functions, with the exception of `fsi()`. Previous documentation was misleading in that it said valid confidence intervals cannot be constructed from the sampling errors. This is not strictly true. The sampling error is a function of the variance/standard error, and so the sampling error can be used to calcualte confidence intervals when manipulated appropriately. See the note in all model fitting functions documentation for further details. 
 
 # rFIA v1.1.3
 

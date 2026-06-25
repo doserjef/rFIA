@@ -104,7 +104,7 @@ diversity <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     AREA_TOTAL,
                     H_a_VAR, Eh_a_VAR, S_a_VAR, AREA_TOTAL_VAR,
                     H_a_SE, Eh_a_SE, S_a_SE, AREA_TOTAL_SE,
-                    nPlots_TREE, nPlots_AREA, N)
+                    nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

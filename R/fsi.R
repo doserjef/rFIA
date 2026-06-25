@@ -220,8 +220,8 @@ If not already installed, you can install JAGS from SourceForge:
     } else { # Tidy up LMs
       # Make it tidy
       betas <- chains %>%
-        dplyr::bind_rows()
-      tidyr::pivot_longer(cols = everything(), names_to = 'var', values_to = 'estimate') %>%
+        dplyr::bind_rows() %>%
+        tidyr::pivot_longer(cols = everything(), names_to = 'var', values_to = 'estimate') %>%
         dplyr::filter(stringr::str_detect(var, 'deviance', negate = TRUE)) %>%
         dplyr::mutate(term = dplyr::case_when(stringr::str_detect(var, 'alpha') ~ 'int',
                                               TRUE ~ 'rate')) %>%

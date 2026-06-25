@@ -79,7 +79,7 @@ standStruct <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::select(!!!grpSyms, COVER_PCT, STAGE_AREA_TOTAL, AREA_TOTAL,
                     COVER_PCT_VAR, STAGE_AREA_TOTAL_VAR, AREA_TOTAL_VAR,
                     COVER_PCT_SE, STAGE_AREA_TOTAL_SE, AREA_TOTAL_SE,
-                    nPlots_AREA, N)
+                    nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

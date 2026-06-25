@@ -90,7 +90,7 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::select(!!!grpSyms, BIO_ACRE, CARB_ACRE, BIO_TOTAL, CARB_TOTAL, AREA_TOTAL,
                     BIO_ACRE_VAR, CARB_ACRE_VAR, BIO_TOTAL_VAR, CARB_TOTAL_VAR, AREA_TOTAL_VAR,
                     BIO_ACRE_SE, CARB_ACRE_SE, BIO_TOTAL_SE, CARB_TOTAL_SE, AREA_TOTAL_SE,
-                    nPlots_TREE, nPlots_AREA, N)
+                    nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

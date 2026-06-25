@@ -131,7 +131,7 @@ vitalRates <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     DIA_TOTAL_VAR:BIO_TOTAL_VAR, TREE_TOTAL_VAR, AREA_TOTAL_VAR,
                     DIA_GROW_SE:BIO_GROW_AC_SE,
                     DIA_TOTAL_SE:BIO_TOTAL_SE, TREE_TOTAL_SE, AREA_TOTAL_SE,
-                    nPlots_TREE, nPlots_AREA, N)
+                    nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

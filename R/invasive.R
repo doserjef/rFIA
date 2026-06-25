@@ -79,7 +79,7 @@ invasive <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::select(!!!grpSyms, COVER_PCT, INV_AREA_TOTAL, AREA_TOTAL,
                     COVER_PCT_VAR, INV_AREA_TOTAL_VAR, AREA_TOTAL_VAR,
                     COVER_PCT_SE, INV_AREA_TOTAL_SE, AREA_TOTAL_SE,
-                    nPlots_INV, nPlots_AREA, N)
+                    nPlots_INV, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

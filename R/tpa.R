@@ -87,7 +87,7 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::select(!!!grpSyms, TPA, BAA, TREE_TOTAL, BA_TOTAL, AREA_TOTAL, 
                     TPA_VAR, BAA_VAR, TREE_TOTAL_VAR, BA_TOTAL_VAR, AREA_TOTAL_VAR, 
                     TPA_SE, BAA_SE, TREE_TOTAL_SE, BA_TOTAL_SE, AREA_TOTAL_SE, 
-                    nPlots_TREE, nPlots_AREA, N)
+                    nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {

@@ -92,7 +92,7 @@ dwm <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     VOL_TOTAL_VAR, BIO_TOTAL_VAR, CARB_TOTAL_VAR, AREA_TOTAL_VAR,
                     VOL_ACRE_SE, BIO_ACRE_SE, CARB_ACRE_SE,
                     VOL_TOTAL_SE, BIO_TOTAL_SE, CARB_TOTAL_SE, AREA_TOTAL_SE,
-                    nPlots_DWM, nPlots_AREA, N)
+                    nPlots_DWM, nPlots_AREA)
 
     # Drop totals unless told not to
     if (!totals) {
