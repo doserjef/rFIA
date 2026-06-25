@@ -2,8 +2,7 @@ vitalRates <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                        bySpecies = FALSE, bySizeClass = FALSE, landType = 'forest', 
                        treeType = 'all', method = 'TI', lambda = 0.5, 
                        treeDomain = NULL, areaDomain = NULL, totals = FALSE, 
-                       variance = FALSE, byPlot = FALSE, treeList = FALSE, 
-                       nCores = 1) {
+                       byPlot = FALSE, treeList = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
@@ -124,8 +123,7 @@ vitalRates <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
 
                     # Plot counts
                     nPlots_TREE = nPlots.x,
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms,
                     DIA_GROW:BIO_GROW_AC,
                     DIA_TOTAL:BIO_TOTAL, TREE_TOTAL, AREA_TOTAL,
@@ -140,12 +138,8 @@ vitalRates <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
 
   }
 

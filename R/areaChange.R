@@ -1,8 +1,7 @@
 areaChange <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                        byLandType = FALSE, landType = 'forest', method = 'TI', 
                        lambda = 0.5, treeDomain = NULL, areaDomain = NULL, 
-                       variance = FALSE, byPlot = FALSE, 
-                       condList = FALSE, chngType = 'net', nCores = 1) {
+                       byPlot = FALSE, condList = FALSE, chngType = 'net', nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
@@ -80,19 +79,14 @@ areaChange <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     PERC_CHNG_SE = sqrt(PERC_CHNG_VAR) / abs(PERC_CHNG) * 100,
 
                     # Plot counts
-                    nPlots_AREA = nPlots.x,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.x) %>%
       dplyr::select(!!!grpSyms, PERC_CHNG, AREA_CHNG, PREV_AREA,
                     PERC_CHNG_VAR, AREA_CHNG_VAR, PREV_AREA_VAR,
                     PERC_CHNG_SE, AREA_CHNG_SE, PREV_AREA_SE,
                     nPlots_AREA, N)
 
-    # Select either variance or SE, depending on input
-    if (variance) {
-      tEst <- tEst[,!stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
 
   }
 

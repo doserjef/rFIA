@@ -1,8 +1,7 @@
 seedling <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                      bySpecies = FALSE, landType = 'forest', method = 'TI', 
                      lambda = 0.5, treeDomain = NULL, areaDomain = NULL, 
-                     totals = FALSE, variance = FALSE, byPlot = FALSE, 
-                     treeList = FALSE, nCores = 1) {
+                     totals = FALSE, byPlot = FALSE, treeList = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
@@ -76,8 +75,7 @@ seedling <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     TPA_SE = sqrt(TPA_VAR) / TPA * 100,
                     # Plot counts
                     nPlots_TREE = nPlots.x, 
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, TPA, TREE_TOTAL, AREA_TOTAL, 
                     TPA_VAR, TREE_TOTAL_VAR, AREA_TOTAL_VAR, 
                     TPA_SE, TREE_TOTAL_SE, AREA_TOTAL_SE, 
@@ -88,12 +86,8 @@ seedling <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
   }
 
   # Pretty output

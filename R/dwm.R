@@ -1,8 +1,7 @@
 dwm <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                 landType = 'forest', method = 'TI', lambda = 0.5, 
-                areaDomain = NULL, totals = FALSE, variance = FALSE, 
-                byPlot = FALSE, condList = FALSE, byFuelType = TRUE, 
-                nCores = 1) {
+                areaDomain = NULL, totals = FALSE, byPlot = FALSE, 
+                condList = FALSE, byFuelType = TRUE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
@@ -86,8 +85,7 @@ dwm <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     CARB_ACRE_SE = sqrt(CARB_ACRE_VAR) / CARB_ACRE * 100,
                     # Plot counts
                     nPlots_DWM = nPlots.x,
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, VOL_ACRE, BIO_ACRE, CARB_ACRE,
                     VOL_TOTAL, BIO_TOTAL, CARB_TOTAL, AREA_TOTAL,
                     VOL_ACRE_VAR, BIO_ACRE_VAR, CARB_ACRE_VAR,
@@ -101,12 +99,8 @@ dwm <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')]
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
   }
 
   # Pretty output

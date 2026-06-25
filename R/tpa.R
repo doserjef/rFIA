@@ -1,7 +1,7 @@
 tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                 bySpecies = FALSE, bySizeClass = FALSE, landType = 'forest', 
                 treeType = 'live', method = 'TI', lambda = 0.5, treeDomain = NULL, 
-                areaDomain = NULL, totals = FALSE, variance = FALSE, byPlot = FALSE, 
+                areaDomain = NULL, totals = FALSE, byPlot = FALSE, 
                 treeList = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
@@ -83,8 +83,7 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     BAA_SE = sqrt(BAA_VAR) / BAA * 100,
                     # Plot counts
                     nPlots_TREE = nPlots.x, 
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, TPA, BAA, TREE_TOTAL, BA_TOTAL, AREA_TOTAL, 
                     TPA_VAR, BAA_VAR, TREE_TOTAL_VAR, BA_TOTAL_VAR, AREA_TOTAL_VAR, 
                     TPA_SE, BAA_SE, TREE_TOTAL_SE, BA_TOTAL_SE, AREA_TOTAL_SE, 
@@ -95,12 +94,8 @@ tpa <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
   }
 
   # Pretty output

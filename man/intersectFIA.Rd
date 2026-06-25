@@ -47,7 +47,7 @@ Stanke, H., Finley, A. O., Weed, A. S., Walters, B. F., & Domke, G. M. (2020). r
 
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
 \seealso{\code{\link{clipFIA}}}

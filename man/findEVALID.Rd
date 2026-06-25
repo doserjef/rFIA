@@ -32,7 +32,7 @@ FIA Database User Guide: \url{https://research.fs.usda.gov/understory/forest-inv
 }
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
 %% ~Make other sections like Warning with \section{Warning }{....} ~

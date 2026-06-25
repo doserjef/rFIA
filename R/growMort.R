@@ -2,7 +2,7 @@ growMort <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                      bySpecies = FALSE, bySizeClass = FALSE, landType = 'forest', 
                      treeType = 'all', method = 'TI', lambda = 0.5, 
                      stateVar = 'TPA', treeDomain = NULL, areaDomain = NULL, 
-                     totals = FALSE, variance = FALSE, byPlot = FALSE, 
+                     totals = FALSE, byPlot = FALSE, 
                      treeList = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
@@ -137,8 +137,7 @@ growMort <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
 
                     # Plot counts
                     nPlots_TREE = nPlots.x,
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, RECR_TPA:CHNG_PERC,
                     RECR_TOTAL:CHNG_TOTAL, PREV_TOTAL, CURR_TOTAL, AREA_TOTAL,
                     RECR_TPA_VAR:CHNG_PERC_VAR,
@@ -158,12 +157,9 @@ growMort <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
+
   }
 
   # Modify names if a different state variable was given

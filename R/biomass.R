@@ -2,7 +2,7 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     bySpecies = FALSE, bySizeClass = FALSE, byComponent = FALSE, 
                     landType = 'forest', treeType = 'live', method = 'TI', 
                     lambda = 0.5, treeDomain = NULL, areaDomain = NULL, 
-                    totals = FALSE, variance = FALSE, byPlot = FALSE, 
+                    totals = FALSE, byPlot = FALSE, 
                     treeList = FALSE, component = 'AG', bioMethod = 'NSVB', 
                     nCores = 1) {
 
@@ -86,8 +86,7 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     CARB_ACRE_SE = sqrt(CARB_ACRE_VAR) / CARB_ACRE * 100,
                     # N plots
                     nPlots_TREE = nPlots.x,
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, BIO_ACRE, CARB_ACRE, BIO_TOTAL, CARB_TOTAL, AREA_TOTAL,
                     BIO_ACRE_VAR, CARB_ACRE_VAR, BIO_TOTAL_VAR, CARB_TOTAL_VAR, AREA_TOTAL_VAR,
                     BIO_ACRE_SE, CARB_ACRE_SE, BIO_TOTAL_SE, CARB_TOTAL_SE, AREA_TOTAL_SE,
@@ -98,12 +97,9 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')]
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
+
   }
 
   # Pretty output

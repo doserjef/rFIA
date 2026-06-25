@@ -1,7 +1,7 @@
 customPSE <- function(db, x, xVars, xGrpBy = NULL, xTransform = NULL, 
                       y = NULL, yVars = NULL, yGrpBy = NULL, 
                       yTransform = NULL, method = 'TI', lambda = 0.5, 
-                      totals = TRUE, variance = TRUE) {
+                      totals = TRUE) {
 
   # Warnings upfront ----------------------------------------------------------
   # Must have an FIA.Database or a remote one
@@ -246,12 +246,8 @@ customPSE <- function(db, x, xVars, xGrpBy = NULL, xTransform = NULL,
     out <- out[,!stringr::str_detect(names(out), '_TOTAL')]
   }
 
-  # Select either variance or SE, depending on input
-  if (variance) {
-    out <- out[,!stringr::str_detect(names(out), '_SE')]
-  } else {
-    out <- out[,!stringr::str_detect(names(out), '_VAR')]
-  }
+  # Remove variance columns to avoid confusion
+  tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
 
   # Pretty output
   out <- out %>%
@@ -319,8 +315,7 @@ formatNames <- function(x, grpBy) {
                   !!!total.se.syms,
                   !!!ratio.var.syms,
                   !!!total.var.syms,
-                  dplyr::any_of(c('nPlots_x', 'nPlots_y')),
-                  N)
+                  dplyr::any_of(c('nPlots_x', 'nPlots_y')))
 
   return(x)
 }

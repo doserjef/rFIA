@@ -1,7 +1,6 @@
 invasive <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                      landType = 'forest', method = 'TI', lambda = 0.5, 
-                     areaDomain = NULL, totals = FALSE, variance = FALSE, 
-                     byPlot = FALSE, nCores = 1) {
+                     areaDomain = NULL, totals = FALSE, byPlot = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
@@ -76,8 +75,7 @@ invasive <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     COVER_PCT_SE = sqrt(COVER_PCT_VAR) / COVER_PCT * 100,
                     # Plot counts
                     nPlots_INV = nPlots.x, 
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, COVER_PCT, INV_AREA_TOTAL, AREA_TOTAL,
                     COVER_PCT_VAR, INV_AREA_TOTAL_VAR, AREA_TOTAL_VAR,
                     COVER_PCT_SE, INV_AREA_TOTAL_SE, AREA_TOTAL_SE,
@@ -88,12 +86,8 @@ invasive <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
   }
 
   # Pretty output

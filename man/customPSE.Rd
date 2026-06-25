@@ -4,12 +4,12 @@
 \title{Post-stratified estimator for custom variables in FIA Data}
 
 \description{
-Produces estimates of population totals, ratios, and associated variances for custom variables using FIA's post-stratified inventories. Accepts tree- and condition-level summaries from rFIA estimator functions as input, with potential modifications to associated variables (e.g., custom allometrics can be applied to estimate tree biomass/carbon). See our website for example use cases.
+Produces estimates of population totals, ratios, and associated sampling errors for custom variables using FIA's post-stratified inventories. Accepts tree- and condition-level summaries from rFIA estimator functions as input, with potential modifications to associated variables (e.g., custom allometrics can be applied to estimate tree biomass/carbon). See our website for example use cases.
 }
 \usage{
 customPSE(db, x, xVars, xGrpBy = NULL, xTransform = NULL, y = NULL,
           yVars = NULL, yGrpBy = NULL, yTransform = NULL, method = "TI",
-          lambda = 0.5, totals = TRUE, variance = TRUE)
+          lambda = 0.5, totals = TRUE)
 }
 
 \arguments{
@@ -37,7 +37,6 @@ customPSE(db, x, xVars, xGrpBy = NULL, xTransform = NULL, y = NULL,
 
   \item{totals}{logical; if TRUE, return total population estimates (e.g. total area) along with ratio estimates (e.g. mean trees per acre).}
 
-  \item{variance}{logical; if TRUE, return estimated variance (\code{VAR}) and sample size (\code{N}). If FALSE, return 'sampling error' (\code{SE}) as returned by EVALIDator. Note: sampling error cannot be used to construct confidence intervals.}
 }
 
 
@@ -66,11 +65,8 @@ IMPORTANT: Only one of TREE_BASIS or AREA_BASIS may be present \code{x} or \code
       \item{\strong{YEAR}: reporting year associated with estimates}
       \item{\strong{*_RATIO}: population ratio estimate, where * will be replaced with the name of each numerator variable}
       \item{\strong{*_TOTAL}: population total estimate, where * will be replaced with the name of each numerator/ denominator variable}
-      \item{\strong{*_RATIO_VAR}: estimated variance of the population ratio}
-      \item{\strong{*_TOTAL_VAR}: estimated variance of the population total}
       \item{\strong{nPlots_x}: number of non-zero plots used to compute numerator estimates}
       \item{\strong{nPlots_y}: number of non-zero plots used to compute denominator estimates}
-      \item{\strong{N}: total number of plots (including zeros) associated with each inventory}
       }
 }
 
@@ -85,10 +81,10 @@ Stanke, H., Finley, A. O., Weed, A. S., Walters, B. F., & Domke, G. M. (2020). r
 }
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
-\note{All sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. IMPORTANT: sampling error cannot be used to construct confidence intervals. Please use \code{variance = TRUE} for that (i.e., return variance and sample size instead of sampling error).}
+\note{All percent sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. To determine the margin of error for confidence intervals, use the following formula, t * (SE * mean / 100), where t is the corresponding t value for your desired level of confidence (e.g., approximately 2 for a 95\% confidence interval). To determine the degrees of freedom for the t value, use \code{nPlots_AREA}. Alternatively, you can use a normal approximation for the confidence interval. The validity of the normal approximation decreases as the sample size decreases.}
 
 \examples{
 \dontshow{
@@ -124,8 +120,7 @@ customPSE(db = fiaRI,
 # 
 # # Ensure the above matches expected output
 # tpa(fiaRI,
-#     totals = TRUE,
-#     variance = TRUE)
+#     totals = TRUE)
 \dontshow{
   # Restore thread setting
   data.table::setDTthreads(dt_threads)

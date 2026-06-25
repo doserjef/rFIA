@@ -24,7 +24,7 @@ Easy, efficient parallelization is implemented with the \code{\link{parallel}} p
 }
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
 \seealso{

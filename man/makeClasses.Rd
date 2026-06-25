@@ -28,7 +28,7 @@ Factor or integer vector. Factor values represent class intervals with \code{[b1
 
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
 

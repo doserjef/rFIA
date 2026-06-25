@@ -1,7 +1,7 @@
 carbon <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                    byPool = TRUE, byComponent = FALSE, landType = 'forest', 
                    method = 'TI', lambda = 0.5, areaDomain = NULL, 
-                   totals = FALSE, variance = FALSE, byPlot = FALSE, 
+                   totals = FALSE, byPlot = FALSE, 
                    condList = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
@@ -74,8 +74,7 @@ carbon <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     AREA_TOTAL_SE = sqrt(fa_var) / fa_mean * 100,
                     CARB_ACRE_SE = sqrt(CARB_ACRE_VAR) / CARB_ACRE * 100,
                     # Plot counts
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, CARB_ACRE, CARB_TOTAL, AREA_TOTAL,
                     CARB_ACRE_VAR, CARB_TOTAL_VAR, AREA_TOTAL_VAR,
                     CARB_ACRE_SE, CARB_TOTAL_SE, AREA_TOTAL_SE,
@@ -86,12 +85,9 @@ carbon <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
+
   }
 
   # Pretty output

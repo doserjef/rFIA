@@ -11,7 +11,7 @@ diversity(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, bySizeClass = F
           landType = 'forest', treeType = 'live', method = 'TI', lambda = 0.5,
           stateVar = TPA_UNADJ, grpVar = SPCD, treeDomain = NULL,
           areaDomain = NULL, byPlot = FALSE, condList = FALSE, totals = FALSE,
-          variance = FALSE, nCores = 1)
+          nCores = 1)
 }
 
 \arguments{
@@ -42,8 +42,6 @@ diversity(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, bySizeClass = F
   \item{areaDomain}{logical predicates defined in terms of the variables in PLOT and/or COND tables. Used to define the area for which estimates will be produced (e.g. within 1 mile of improved road: \code{RDDISTCD \%in\% c(1:6)}, Hard maple/basswood forest type: \code{FORTYPCD == 805}. Multiple conditions are combined with \code{&} (and) or \code{|} (or). Only plots within areas where the condition evaluates to TRUE are used in producing estimates. Should NOT be quoted.}
 
   \item{totals}{logical; if TRUE, return total population estimates (e.g. total area) along with ratio estimates (e.g. mean trees per acre).}
-
-  \item{variance}{logical; if TRUE, return estimated variance (\code{VAR}) and sample size (\code{N}). If FALSE, return 'sampling error' (\code{SE}) as returned by EVALIDator. Note: sampling error cannot be used to construct confidence intervals.}
 
   \item{byPlot}{logical; if TRUE, returns estimates for individual plot locations instead of population estimates.}
 
@@ -80,7 +78,7 @@ Timber land is a subset of forest land that is producing or is capable of produc
 }
 
 \value{
-Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}, values are returned for each plot (\code{PLOT_STATUS_CD = 1} when forest exists at the plot location). All variables with names ending in \code{SE}, represent the estimate of sampling error (\%) of the variable. When \code{variance = TRUE}, variables ending in \code{VAR} denote the variance of the variable and \code{N} is the total sample size (i.e., including non-zero plots).
+Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}, values are returned for each plot (\code{PLOT_STATUS_CD = 1} when forest exists at the plot location). All variables with names ending in \code{SE}, represent the estimate of sampling error (\%) of the variable. 
 
 \itemize{
       \item{\strong{H_a}: mean Shannon's Diversity Index, alpha (stand) level}
@@ -92,7 +90,6 @@ Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}
       \item{\strong{S_a}: mean Species Richness, alpha (stand) level}
       \item{\strong{S_b}: Species Richness, beta (landscape) level}
       \item{\strong{S_g}: Species Richness, gamma (regional) level}
-      \item{\strong{nStands}: number of stands with non-zero plots used to compute alpha diversity estimates}
       }
 }
 
@@ -113,8 +110,10 @@ Shannon, C. E. (1948). A Mathematical Theory of Communication. Bell System Techn
 }
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
+
+\note{All percent sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. To determine the margin of error for confidence intervals, use the following formula, t * (SE * mean / 100), where t is the corresponding t value for your desired level of confidence (e.g., approximately 2 for a 95\% confidence interval). To determine the degrees of freedom for the t value, use \code{nStands}. Alternatively, you can use a normal approximation for the confidence interval. The validity of the normal approximation decreases as the sample size decreases.}
 
 \examples{
 \dontshow{

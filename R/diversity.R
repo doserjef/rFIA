@@ -3,7 +3,7 @@ diversity <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                       treeType = 'live', method = 'TI', lambda = 0.5, 
                       stateVar = TPA_UNADJ, grpVar = SPCD, treeDomain = NULL, 
                       areaDomain = NULL, byPlot = FALSE, condList = FALSE,
-                      totals = FALSE, variance = FALSE, nCores = 1) {
+                      totals = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, treeDomain, 
   # stateVar, and grpVar
@@ -81,8 +81,7 @@ diversity <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     AREA_TOTAL_SE = sqrt(fa_var) / fa_mean * 100,
                     # Plot counts
                     nPlots_TREE = nPlots.x,
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU)
+                    nPlots_AREA = nPlots.y)
 
     # Up a few spatial scales
     fullGrps <- dplyr::syms(grpBy[!c(grpBy %in% 'lambda')])
@@ -112,12 +111,8 @@ diversity <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
   }
 
   # Pretty output

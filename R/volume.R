@@ -2,7 +2,7 @@ volume <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                    bySpecies = FALSE, bySizeClass = FALSE, landType = 'forest', 
                    treeType = 'live', volType = 'NET', method = 'TI', 
                    lambda = 0.5, treeDomain = NULL, areaDomain = NULL, totals = FALSE, 
-                   variance = FALSE, byPlot = FALSE, treeList = FALSE, nCores = 1) {
+                   byPlot = FALSE, treeList = FALSE, nCores = 1) {
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
@@ -88,8 +88,7 @@ volume <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                     SAW_MBF_ACRE_SE = sqrt(SAW_MBF_ACRE_VAR) / SAW_MBF_ACRE * 100,
                     # Plot counts
                     nPlots_TREE = nPlots.x, 
-                    nPlots_AREA = nPlots.y,
-                    N = P2PNTCNT_EU) %>%
+                    nPlots_AREA = nPlots.y) %>%
       dplyr::select(!!!grpSyms, BOLE_CF_ACRE, SAW_CF_ACRE, SAW_MBF_ACRE, 
                     BOLE_CF_TOTAL, SAW_CF_TOTAL, SAW_MBF_TOTAL, AREA_TOTAL, 
                     BOLE_CF_ACRE_VAR, SAW_CF_ACRE_VAR, SAW_MBF_ACRE_VAR, 
@@ -103,12 +102,8 @@ volume <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       tEst <- tEst[, !stringr::str_detect(names(tEst), '_TOTAL')] 
     }
 
-    # Select either variance or sampling errors, depending on input
-    if (variance) {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_SE')]
-    } else {
-      tEst <- tEst[, !stringr::str_detect(names(tEst), '_VAR')]
-    }
+    # Remove variance columns to avoid confusion
+    tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
   }
 
   # Pretty output

@@ -40,7 +40,7 @@ List object containing spatially intersected FIADB tables.
 }
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
 \references{

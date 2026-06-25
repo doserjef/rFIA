@@ -11,8 +11,7 @@ Produces estimates of down woody material stocks on a per acre basis from the Fo
 \usage{
 dwm(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, landType = 'forest',
     method = 'TI', lambda = 0.5, areaDomain = NULL, totals = FALSE,
-    variance = FALSE, byPlot = FALSE, condList = FALSE,
-    byFuelType = TRUE, nCores = 1)
+    byPlot = FALSE, condList = FALSE, byFuelType = TRUE, nCores = 1)
 }
 
 \arguments{
@@ -33,8 +32,6 @@ dwm(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, landType = 'forest',
   \item{areaDomain}{Logical predicates defined in terms of the variables in PLOT and/or COND tables. Used to define the area for which estimates will be produced (e.g. within 1 mile of improved road: \code{RDDISTCD \%in\% c(1:6)}, Hard maple/basswood forest type: \code{FORTYPCD == 805}. Multiple conditions are combined with \code{&} (and) or \code{|} (or). Only plots within areas where the condition evaluates to TRUE are used in producing estimates. Should NOT be quoted.}
 
   \item{totals}{logical; if TRUE, return total population estimates (e.g. total area) along with ratio estimates (e.g. mean trees per acre).}
-
-    \item{variance}{logical; if TRUE, return estimated variance (\code{VAR}) and sample size (\code{N}). If FALSE, return 'sampling error' (\code{SE}) as returned by EVALIDator. Note: sampling error cannot be used to construct confidence intervals.}
 
   \item{byPlot}{logical; if TRUE, returns estimates for individual plot locations instead of population estimates.}
 
@@ -74,7 +71,7 @@ Timber land is a subset of forest land that is producing or is capable of produc
 
 
 \value{
-Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}, values are returned for each plot (\code{PLOT_STATUS_CD = 1} when forest exists at the plot location). All variables with names ending in \code{SE}, represent the estimate of sampling error (\%) of the variable. When \code{variance = TRUE}, variables ending in \code{VAR} denote the variance of the variable and \code{N} is the total sample size (i.e., including non-zero plots).
+Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}, values are returned for each plot (\code{PLOT_STATUS_CD = 1} when forest exists at the plot location). All variables with names ending in \code{SE}, represent the estimate of sampling error (\%) of the variable. 
 
 \itemize{
       \item{\strong{YEAR}: reporting year associated with estimates}
@@ -82,15 +79,16 @@ Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}
       \item{\strong{VOL_ACRE}: estimate of mean volume per acre of dwm (cu.ft/acre)}
       \item{\strong{BIO_ACRE}: estimate of mean biomass per acre of dwm (short tons/acre)}
       \item{\strong{CARB_ACRE}: estimate of mean carbon mass per acre of dwm (short tons/acre)}
-      \item{\strong{nPlots}: number of non-zero plots used to compute estimates}
+      \item{\strong{nPlots_DWM}: number of non-zero plots used to compute dwm estimates}
+      \item{\strong{nPlots_AREA}: number of non-zero plots used to compute area estimates}
       }
 }
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
-\note{All sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. IMPORTANT: sampling error cannot be used to construct confidence intervals. Please use \code{variance = TRUE} for that (i.e., return variance and sample size instead of sampling error).}
+\note{All percent sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. To determine the margin of error for confidence intervals, use the following formula, t * (SE * mean / 100), where t is the corresponding t value for your desired level of confidence (e.g., approximately 2 for a 95\% confidence interval). To determine the degrees of freedom for the t value, use \code{nPlots_AREA}. Alternatively, you can use a normal approximation for the confidence interval. The validity of the normal approximation decreases as the sample size decreases.}
 
 \references{
 rFIA website: \url{https://doserlab.com/files/rfia/}

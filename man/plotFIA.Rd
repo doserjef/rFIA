@@ -91,7 +91,7 @@ Specify \code{savePath} and \code{fileName} to save plots (animations saved as .
 
 
 \author{
-Hunter Stanke and Andrew Finley
+Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
 \value{
