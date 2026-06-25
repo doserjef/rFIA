@@ -513,7 +513,6 @@ If not already installed, you can install JAGS from SourceForge:
                       REMPER_VAR = rempVar,
                       
                       nPlots = plotIn_t,
-                      N = P2PNTCNT_EU,
                       FSI_INT = qt(.975, df=nPlots-1) * sqrt(siVar),
                       PERC_FSI_INT = qt(.975, df=nPlots-1) * sqrt(psiVar)) %>%
         dplyr::mutate(FSI_STATUS = dplyr::case_when(
