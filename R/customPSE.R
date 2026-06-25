@@ -247,7 +247,7 @@ customPSE <- function(db, x, xVars, xGrpBy = NULL, xTransform = NULL,
   }
 
   # Remove variance columns to avoid confusion
-  tEst <- tEst[,!stringr::str_detect(names(tEst), '_VAR')]
+  out <- out[,!stringr::str_detect(names(out), '_VAR')]
 
   # Pretty output
   out <- out %>%

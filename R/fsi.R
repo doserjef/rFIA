@@ -514,8 +514,8 @@ If not already installed, you can install JAGS from SourceForge:
                       
                       nPlots = plotIn_t,
                       N = P2PNTCNT_EU,
-                      FSI_INT = qt(.975, df=N-1) * (sqrt(siVar)/sqrt(N)),
-                      PERC_FSI_INT = qt(.975, df=N-1) * (sqrt(psiVar)/sqrt(N))) %>%
+                      FSI_INT = qt(.975, df=nPlots-1) * sqrt(siVar),
+                      PERC_FSI_INT = qt(.975, df=nPlots-1) * sqrt(psiVar)) %>%
         dplyr::mutate(FSI_STATUS = dplyr::case_when(
           FSI < 0 & FSI + FSI_INT < 0 ~ 'Decline',
           FSI < 0 & FSI + FSI_INT > 0 ~ 'Stable',
