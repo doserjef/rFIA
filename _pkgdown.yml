@@ -2,10 +2,10 @@ url: ~
 template:
   bootstrap: 5
 authors: 
-  Hunter Stanke: 
-          href: "https://hunter-stanke.com/"
   Jeffrey Doser:
           href: "https://doserlab.com/"
+  Hunter Stanke: 
+          href: "https://hunter-stanke.com/"
   Andrew Finley:
           href: "https://www.finley-lab.com/"
 

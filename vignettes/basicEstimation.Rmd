@@ -1,7 +1,7 @@
 ---
 title: "Estimating Forest Attributes"
-author: "Hunter Stanke, Jeffrey W. Doser"
-date: "2019 (last updated February 5, 2025)"
+author: "Jeffrey W. Doser, Hunter Stanke"
+date: "2019 (last updated June 26, 2026)"
 description: Learn how to estimate forest parameters 
 output: 
   rmarkdown::html_vignette:
@@ -34,10 +34,10 @@ data('countiesRI')
 
 #### Most recent subsets
 
-To subset only the data needed to produce estimates for the most recent inventory year (2017 in our case), users can simply pass their `FIA.Database` object to `clipFIA()`, or more explicitly specify `mostRecent = TRUE` in the call:
+To subset only the data needed to produce estimates for the most recent inventory year (2018 in our case), users can simply pass their `FIA.Database` object to `clipFIA()`, or more explicitly specify `mostRecent = TRUE` in the call:
 
 ```{r}
-# Most Recent Subset (2017)
+# Most Recent Subset (2018)
 riMR <- clipFIA(fiaRI) 
 
 # More explicity (identical to above)
@@ -71,7 +71,7 @@ tpaRI_MR <- tpa(riMR)
 tpaRI <- tpa(fiaRI)
 ```
 
-If you would like to return estimates of population totals (e.g., total trees) along with ratio estimates (e.g., mean trees/acre), specify `totals = TRUE` in the call to `tpa()`. All estimation functions in `rFIA` by default return the sampling error (i.e., standard deviation / mean * 100) as a measure of uncertainty in the population estimates. Alternatively, you can specify `variance = TRUE` to return the variance instead of the sampling error. 
+If you would like to return estimates of population totals (e.g., total trees) along with ratio estimates (e.g., mean trees/acre), specify `totals = TRUE` in the call to `tpa()`. All estimation functions in `rFIA` by default return the sampling error (i.e., standard error / mean * 100) as a measure of uncertainty in the population estimates. Continue reading to see how confidence intervals can be constructed from the sampling error. 
 
 # Basic plot-level estimates
 
@@ -102,7 +102,7 @@ tpaRI_spsc <- tpa(riMR, bySpecies = TRUE, bySizeClass = TRUE)
 
 # Grouping by other variables
 
-To group estimates by a variable defined in the FIA Database (other than species or size class), pass the variable name to the `grpBy` argument of `tpa()`. You can find definitions of all variables in the FIA Database in the the [FIA User Guide](https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi). Variables of interest will most likely be contained in the condition (COND), plot (PLOT), or tree (TREE) tables.
+To group estimates by a variable defined in the FIA Database (other than species or size class), pass the variable name to the `grpBy` argument of `tpa()`. You can find definitions of all variables in the FIA Database in the the [FIA User Guide](https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi). Variables of interest will most likely be contained in the condition (COND), plot (PLOT), plot geometry (PLOTGEOM), or tree (TREE) tables.
 
 ``` {r}
 # grpBy specifies what to group estimates by (just like species and size class above)
@@ -141,7 +141,7 @@ tpaRI_domain <- tpa(riMR,
                     areaDomain = PHYSCLCD %in% 20:29)
 ```
 
-In the code above, DIA describes the DBH of stems, CCLCD their canopy position, and PHYSCLCD the physiographic class upon which the class occurs. You can find definitions of all variables in the [FIA User Guide](https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi). Variables of interest will most likely be contained in the condition (COND), plot (PLOT), or tree (TREE) tables.
+In the code above, DIA describes the DBH of stems, CCLCD their canopy position, and PHYSCLCD the physiographic class upon which the class occurs. You can find definitions of all variables in the [FIA User Guide](https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi). Variables of interest will most likely be contained in the condition (COND), plot (PLOT), plot geometry (PLOTGEOM), or tree (TREE) tables.
 
 # Visualization
 
@@ -176,31 +176,44 @@ plotFIA(tpaRI_spsc, y = BAA, grp = COMMON_NAME, x = sizeClass,
 
 You can specify `n.max` to any grouped call to `plotFIA` to only display the top or bottom `n` groups in your plot. In the call above we specified `n.max = 5`, resulting in the species with the highest average basal area per acre values being plotted. To only plot the bottom five, specify `n.max = -5`.
 
-# Variance vs Sampling Error
+# Sampling Error and Confidence Intervals 
 
-FIA's flagship online estimation tool, [EVALIDator](https://apps.fs.usda.gov/fiadb-api/evalidator), reports estimates of uncertainty as "% sampling error" (SE). While the definition is a bit elusive, this measure is simply the % coefficient of variation, or the sample standard deviation divided by the sample mean multiplied by 100. FIA opts to report SE as opposed to sample variance because SE provides an easy, "standardized" way to compare uncertainty across estimates with very different absolute values (i.e., how large is the "spread" relative to the mean?). However, SE has its downsides. First, confidence intervals cannot be derived directly from SE. Second, the "standardized" nature of the SE breaks down as the mean approaches zero (SE approaches infinity in this case), making it particularly uninformative for change estimates that tend near zero. 
+FIA's flagship online estimation tool, [EVALIDator](https://apps.fs.usda.gov/fiadb-api/evalidator), reports estimates of uncertainty as "% sampling error" (SE). This is an intuitive way to assess the amount of uncertainty in a population estimate, particularly when you are comparing uncertainty in estimates with very different absolute values (i.e., how large is the "spread" relative to the mean?). It is defined as the standard error divided by the sample estimate multiplied by 100. A downside to the percent sampling error is that it breaks down as the mean approaches zero (i.e., SE approaches infinity in this case), and so it is not always particularly useful for change estimates that tend to be near zero.  
 
-In `rFIA` we allow users to return estimates of uncertainty in terms of SE *or* sample variance using the `variance` argument (where `variance=TRUE` returns sample variance). Along with the sample size, sample variance can be used to produce proper confidence intervals for totals and ratios: 
+Fortunately, we can easily derive confidence intervals directly from SE. One approach is to use a normal approximation, which works well when sample sizes are large and the distribution of population values is not extremely skewed. Thus, a simple confidence interval takes the following form: 
 
-```{r eval=TRUE}
-# TPA with % sampling error (SE)
-tpaSE <- tpa(riMR, variance = FALSE)
-tpaSE
+$$
+\text{Estimate} \pm z_{(1 - \frac{\alpha}{2})} \frac{SE \times \text{Estimate}}{100}.
+$$
 
-# TPA with % sampling error (SE)
-tpaVAR <- tpa(riMR, variance = TRUE)
-tpaVAR
+The term $\frac{SE \times \text{Estimate}}{100}$ is equal to the standard deviation of the sampling distribution of the post-stratified estimator (i.e., the standard error). $z$ is the z-value from the normal distribution. $\alpha$ is the confidence level which determines the percentage confidence one has in the interval (i.e., $\alpha = 0.05$ for a 95% confidence interval). Doing this calculation with `rFIA` is as simple as the following couple lines of code.  
 
-# Estimate 95% confidence interval around 2018 TPA
-halfInt <- qt(0.975, tpaVAR$N - 1) * sqrt(tpaVAR$TPA_VAR)
+```{r, eval = TRUE}
+tpa_est <- tpa(riMR)
+# Margin of error for 95% confidence interval with a normal approx.
+moe <- qnorm(0.975) * tpa_est$TPA_SE * tpa_est$TPA / 100 
+# Lower bound
+tpa_est$TPA - moe 
+# Upper bound
+tpa_est$TPA + moe
+```
 
-# Lower
-tpaVAR$TPA - halfInt
 
-# Upper
-tpaVAR$TPA + halfInt
+The normal approximation works well when sample sizes are adequately large. This approach will work in many `rFIA` use cases, and it is the approach recommended or provided by other FIA software such as EVALIDator and the FIESTA R package. However, when generating estimates that have small sample sizes (e.g., TPA within individual counties) it may provide a confidence interval that is more precise than it should be. 
+
+A more statistically accurate approach would be to replace the $z$ value in the above with a $t$ value from the Student's t distribution. This requires also specifying the degrees of freedom, which in this case corresponds to $n-1$. Now, that leads to the question of what is $n$? The exact answer will depend somewhat on the estimate that you are generating. For most forest parameter estimates in `rFIA`, one should use the number of plots used to compute land area estimates (i.e., `nPlots_AREA`). For certain estimates of change, it may be more reasonable to use `nPlots_TREE`, which would ensure that only plots with the necessary requirements for informing the sample are used in the degrees of freedom calculation. 
+
+```{r}
+# Margin of error for 95% confidence interval with a normal approx.
+moe_t <- qt(0.975, df = tpa_est$nPlots_AREA - 1) * tpa_est$TPA_SE * tpa_est$TPA / 100 
+# Lower bound
+tpa_est$TPA - moe_t
+# Upper bound
+tpa_est$TPA + moe_t
 
 ```
+
+Notice in this case, the estimates are nearly identical since the sample size is quite large (i.e., `r tpa_est$nPlots_AREA`). The difference between the two approaches will increase as the sample size decreases.  
 
 # Other rFIA functions
 

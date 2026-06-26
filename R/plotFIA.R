@@ -149,7 +149,7 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
       #yv = data$yVar
       SE <- data
       for (i in 1:ncol(SE)){
-        SE[,i] <- if_else(data[,i] == data$yVar, 1, 0)
+        SE[,i] <- if_else(dplyr::pull(data[,i]) == data$yVar, 1, 0)
       }
 
       SE <- SE %>%
@@ -196,9 +196,9 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
         map <- data %>%
           select(yVar, xVar, ymin, ymax) %>%
           ungroup() %>%
-          ggplot(aes(x = xVar, y = yVar, group = 1), group = 1) +
-          geom_errorbar(aes(ymin=ymin, ymax=ymax), size = .67, alpha= .67, width = .5) +
-          geom_line(aes(group = 1), color = line.color, lwd = line.width) +
+          ggplot(aes(x = xVar, y = yVar)) +
+          geom_errorbar(aes(ymin=ymin, ymax=ymax), linewidth = .67, alpha= .67, width = .5) +
+          geom_line(color = line.color, lwd = line.width) +
           theme_bw() +
           ggtitle(plot.title) +
           xlab(ifelse(is.null(x.lab), quo_name(x_quo), x.lab)) +
@@ -212,8 +212,8 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
         map <- data %>%
           select(yVar, xVar) %>%
           ungroup() %>%
-          ggplot(aes(x = xVar, y = yVar, group = 1), group = 1) +
-          geom_line(aes(group = 1), color = line.color, lwd = line.width) +
+          ggplot(aes(x = xVar, y = yVar)) +
+          geom_line(color = line.color, lwd = line.width) +
           theme_bw() +
           ggtitle(plot.title) +
           xlab(ifelse(is.null(x.lab), quo_name(x_quo), x.lab)) +
@@ -246,7 +246,7 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
                 plot.title = element_text(size = 17 * text.size, face = 'bold', family = text.font),
                 legend.title = element_text(size = 15 * text.size, face = 'bold.italic', family = text.font),
                 legend.text = element_text(size = 15 * text.size, face = 'italic', family = text.font)) +
-          geom_errorbar(aes(ymin=ymin, ymax=ymax), size = .67, alpha= .67, width = .5)
+          geom_errorbar(aes(ymin=ymin, ymax=ymax), linewidth = .67, alpha= .67, width = .5)
       } else {
         # Omit any NAs in grp
         data <- filter(data, !is.na(grpVar))
