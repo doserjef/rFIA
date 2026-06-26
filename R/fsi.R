@@ -531,7 +531,7 @@ If not already installed, you can install JAGS from SourceForge:
                       PREV_RD, CURR_RD, TPA_RATE, BA_RATE,
                       FSI_VAR, PERC_FSI_VAR, PREV_RD_VAR, CURR_RD_VAR,
                       TPA_RATE_VAR, BA_RATE_VAR,
-                      nPlots, N)
+                      nPlots)
       
     } else {
       tOut <- tOut %>%
@@ -540,7 +540,7 @@ If not already installed, you can install JAGS from SourceForge:
                       PREV_RD, CURR_RD, TPA_RATE, BA_RATE,
                       FSI_VAR, PERC_FSI_VAR, PREV_RD_VAR, CURR_RD_VAR,
                       TPA_RATE_VAR, BA_RATE_VAR,
-                      nPlots, N)
+                      nPlots)
     }
     
     # Snag the names

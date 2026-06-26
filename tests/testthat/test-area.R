@@ -37,7 +37,7 @@ test_that("out is of class tbl_df", {
 # Most recent estimates grouped by stand age on forest land
 # Make a categorical variable which represents stand age (grouped by 10 yr intervals)
 fiaRI_mr$COND$STAND_AGE <- makeClasses(fiaRI_mr$COND$STDAGE, interval = 10)
-out <- area(db = fiaRI_mr, grpBy = STAND_AGE, variance = TRUE)
+out <- area(db = fiaRI_mr, grpBy = STAND_AGE)
 
 test_that("out is of class tbl_df", {
   expect_s3_class(out, "tbl_df")

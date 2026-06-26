@@ -28,8 +28,7 @@ test_that("out is of class tbl_df", {
 # Estimates for live white pine on forested mesic sites
 out <- seedling(fiaRI_mr,
            treeDomain = SPCD == 129, # Species code for white pine
-           areaDomain = PHYSCLCD %in% 21:29, # Mesic Physiographic classes
-           variance = TRUE) 
+           areaDomain = PHYSCLCD %in% 21:29) 
 
 test_that("out is of class tbl_df", {
   expect_s3_class(out, "tbl_df")

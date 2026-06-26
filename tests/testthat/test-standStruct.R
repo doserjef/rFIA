@@ -19,7 +19,7 @@ test_that("out is of class sf", {
 })
 
 # Test 2 ------------------------------
-out <- standStruct(db = fiaRI_mr, landType = 'forest', variance = TRUE)
+out <- standStruct(db = fiaRI_mr, landType = 'forest')
 test_that("out is of class tbl_df", {
   expect_s3_class(out, "tbl_df")
 })
