@@ -293,7 +293,9 @@ fsiHelper2 <- function(x, popState, t, a, grpBy, scaleBy, method, useSeries) {
       nRems <- unique(nMeas$n)
       remsList <- list()
       for (i in 1:length(nRems)) {
-        # Temporal weights for each plot
+        # Temporal weights for each remeasurement (based on the proportion of the 
+        # specific REMPER for those two measurements and the length of the overall
+        # time series). 
         wgts <- nMeas %>%
           dplyr::filter(series <= nRems[i] & n >= nRems[i]) %>%
           dplyr::group_by(pltID) %>%
