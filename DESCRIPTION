@@ -1,7 +1,7 @@
 Package: rFIA
 Type: Package
 Title: Estimation of Forest Variables using the FIA Database
-Version: 1.1.4
+Version: 1.1.4.9000
 Authors@R: c(person("Jeffrey", "Doser", role=c("aut", "cre"), email="jwdoser@ncsu.edu"), person("Hunter", "Stanke", role=c("aut")), person("Andrew", "Finley", role = c("aut")))
 Author: Jeffrey Doser [aut, cre], Hunter Stanke [aut], Andrew Finley [aut]
 Maintainer: Jeffrey Doser <jwdoser@ncsu.edu> 
@@ -29,6 +29,5 @@ Suggests:
     R2jags,
     coda,
     testthat
-RoxygenNote: 7.1.2
 URL: https://github.com/doserjef/rFIA, https://www.doserlab.com/files/rFIA
 BugReports: https://github.com/doserjef/rFIA/issues

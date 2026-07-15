@@ -1,0 +1,10 @@
+linters: linters_with_defaults(
+    object_name_linter = object_name_linter(styles = c("camelCase", "symbols")),
+    line_length_linter = line_length_linter(120),
+    object_usage_linter = NULL,
+    commented_code_linter = NULL
+  )
+exclusions: list(
+    "tests/testthat",
+    "R/sysdata.rda"
+  )

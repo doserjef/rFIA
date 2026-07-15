@@ -13,3 +13,4 @@
 ^pkgdown$
 ^vignettes$
 ^vignettes/\.gitignore$
+^core_references$

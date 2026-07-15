@@ -314,11 +314,16 @@ landTypeDomain <- function(landType, COND_STATUS_CD, SITECLCD, RESERVCD) {
 }
 
 # Tree type domain indicator
-treeTypeDomain <- function(treeType, STATUSCD, DIA, TREECLCD) {
+treeTypeDomain <- function(treeType, STATUSCD, DIA, TREECLCD, STANDING_DEAD_CD) {
   if (tolower(treeType) == 'live'){
     typeD <- data.table::fifelse(STATUSCD == 1, 1, 0)
   } else if (tolower(treeType) == 'dead'){
-    typeD <- data.table::fifelse(STATUSCD == 2, 1, 0)
+    # Matches EVALIDator's "standing dead" definition: a dead tree only
+    # qualifies if it also meets the standing-dead tally-tree criteria
+    # (STANDING_DEAD_CD == 1 -- unbroken bole length >= 4.5 ft, leaning less
+    # than 45 degrees from vertical). Without this, treeType = 'dead'
+    # included down/broken dead trees that EVALIDator excludes.
+    typeD <- data.table::fifelse(STATUSCD == 2 & STANDING_DEAD_CD == 1, 1, 0)
   } else if (tolower(treeType) == 'gs'){
     typeD <- data.table::fifelse(STATUSCD == 1 & DIA >= 5 & TREECLCD == 2, 1, 0)
   } else if (tolower(treeType) == 'all'){
@@ -1106,6 +1111,11 @@ maWeights <- function(pops, method, lambda){
 # different reporting schedules, e.g., if 2016 is most recent in MI and 2017 is
 # most recent in WI, combine them and label as 2017
 combineMR <- function(x){
+  # A domain that matches no plots produces a 0-row x. max(YEAR, na.rm = TRUE)
+  # on an empty vector has no sensible answer, so skip the relabeling rather
+  # than let it emit a "no non-missing arguments to max" warning.
+  if (nrow(x) == 0) return(x)
+
   out <- x %>%
     dplyr::ungroup() %>%
     dplyr::mutate(YEAR = max(YEAR, na.rm = TRUE))

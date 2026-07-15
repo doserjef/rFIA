@@ -102,8 +102,8 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   db$COND$landD <- landTypeDomain(landType, db$COND$COND_STATUS_CD, 
                                   db$COND$SITECLCD, db$COND$RESERVCD)
   # Tree type
-  db$TREE$typeD <- treeTypeDomain(treeType, db$TREE$STATUSCD, db$TREE$DIA, 
-                                  db$TREE$TREECLCD)
+  db$TREE$typeD <- treeTypeDomain(treeType, db$TREE$STATUSCD, db$TREE$DIA,
+                                  db$TREE$TREECLCD, db$TREE$STANDING_DEAD_CD)
 
   # Spatial boundary (determine which of the plots fall within the polygons
   # supplied in polys)
@@ -261,11 +261,18 @@ tpaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     aGrpSyms <- rlang::syms(aGrpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA. Drop them, mirroring the `!is.na(TREE_BASIS)` filter
+      # used for the tree list below.
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Create list of symols for the grpBy statements

@@ -1,3 +1,9 @@
+# rFIA (development version)
+
++ Fixed a bug in `tpa()` where `nPlots_AREA` did not reflect restrictions imposed by `landType = 'timber'` or `areaDomain`, instead always reporting the plot count for the broader `landType = 'forest'` land base. Point estimates and sampling errors were not affected, but `nPlots_AREA` is documented as the recommended degrees of freedom for constructing confidence intervals, so an inflated count understated the true margin of error for any `landType = 'timber'` or `areaDomain`-restricted estimate.
++ Fixed a bug where a `treeDomain`/`areaDomain` matching no data, combined with the default `mostRecent = TRUE` behavior, produced a spurious `"no non-missing arguments to max"` warning instead of a clean empty result. This affected all estimation functions (not just `tpa()`), since the underlying cause was in a shared internal utility.
++ Fixed a bug where `treeType = 'dead'` did not require dead trees to meet the "standing dead" tally-tree criteria (`STANDING_DEAD_CD == 1`), instead counting all trees with `STATUSCD == 2` regardless of whether they were still standing. This inflated `treeType = 'dead'` estimates in states with a meaningful number of down or broken dead trees recorded in the tree table (e.g. North Carolina, where the estimate was roughly 4x too high). This affects every function that supports `treeType`: `tpa()`, `diversity()`, `biomass()`, `volume()`, and `fsi()`. As a consequence, `treeType = 'all'` (which includes every tree regardless of status) is no longer equal to `treeType = 'live'` plus `treeType = 'dead'`, since `'all'` still includes the non-standing dead trees that `'dead'` now excludes.
+
 # rFIA v1.1.4
 
 + Removed `.dots` argument from all calls to `dplyr::group_by()`, which resulted in an error with the latest version of `dplyr` (see [#54](https://github.com/doserjef/rFIA/issues/54)).  

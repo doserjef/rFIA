@@ -108,8 +108,8 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   db$COND$landD <- landTypeDomain(landType, db$COND$COND_STATUS_CD, 
                                   db$COND$SITECLCD, db$COND$RESERVCD)
   # Tree type
-  db$TREE$typeD <- treeTypeDomain(treeType, db$TREE$STATUSCD, db$TREE$DIA, 
-                                  db$TREE$TREECLCD)
+  db$TREE$typeD <- treeTypeDomain(treeType, db$TREE$STATUSCD, db$TREE$DIA,
+                                  db$TREE$TREECLCD, db$TREE$STANDING_DEAD_CD)
 
   # Spatial boundary (determine which of the plots fall within the polygons
   # supplied in polys)
