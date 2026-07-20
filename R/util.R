@@ -506,14 +506,15 @@ udAreaDomain <- function(db, areaDomain) {
 
   # Only evaluate if areaDomain isn't null
   if (!rlang::quo_is_null(areaDomain)) {
-    # We'll join up PLOT and COND, and evaluate in the context of the joined table
-    plt <- db$PLOT %>% 
-      dplyr::filter(PLOT_STATUS_CD == 1)
-    cnd <- db$COND %>% 
-      dplyr::filter(COND_STATUS_CD == 1)
+    # We'll join up PLOT and COND, and evaluate in the context of the joined table.
+    # Note we don't restrict to forest land here (areaDomain is also used by
+    # area()/areaChange() with non-forest landType values), and doing so would
+    # give conditions outside the restriction an NA (not 0) domain indicator,
+    # silently dropping them downstream instead of just returning 0 area.
+    plt <- db$PLOT
+    cnd <- db$COND
 
-
-    pcEval <- dplyr::left_join(plt, 
+    pcEval <- dplyr::left_join(plt,
       dplyr::select(cnd, -c('STATECD', 'UNITCD', 'COUNTYCD', 'INVYR', 'PLOT')), by = 'PLT_CN')
     pcEval$aD <- rlang::eval_tidy(areaDomain, pcEval) # LOGICAL, THIS IS THE DOMAIN INDICATOR
     if(!is.null(pcEval$aD)) pcEval$aD[is.na(pcEval$aD)] <- 0 # Make NAs 0s. Causes bugs otherwise

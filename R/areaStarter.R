@@ -95,8 +95,17 @@ areaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
   # Build a domain indicator for each observation (1 or 0) ----------------
   # Land type
-  db$COND$landD <- landTypeDomain(landType, db$COND$COND_STATUS_CD, 
+  db$COND$landD <- landTypeDomain(landType, db$COND$COND_STATUS_CD,
                                   db$COND$SITECLCD, db$COND$RESERVCD)
+  # The 'all' branch of landTypeDomain() sets landD = 1 unconditionally, which
+  # incorrectly counts nonsampled conditions (COND_STATUS_CD == 5, e.g.
+  # hazardous or denied-access plots) as land area. Excluding them here (rather
+  # than inside the shared landTypeDomain() utility) keeps the fix scoped to
+  # area(), since areaChange() also calls landTypeDomain() and has not yet
+  # been validated for landType = 'all'.
+  if (tolower(landType) == 'all') {
+    db$COND$landD[db$COND$COND_STATUS_CD == 5] <- 0
+  }
 
   # Spatial boundary (determine which of the plots fall within the polygons
   # supplied in polys)
@@ -158,8 +167,11 @@ areaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Dropping irrelevant rows and columns
     dplyr::select(PLT_CN, STATECD, MACRO_BREAKPOINT_DIA, INVYR, MEASYEAR,
                   PLOT_STATUS_CD, dplyr::all_of(grpP), sp, COUNTYCD) %>%
-    # Drop non-forested plots, and those otherwise outside our domain of interest.
-    dplyr::filter(PLOT_STATUS_CD == 1 & sp == 1) %>%
+    # Drop plots outside of area of interest. Note this doesn't filter on
+    # PLOT_STATUS_CD == 1, since area() supports landType values other than
+    # 'forest' (e.g. 'water', 'non-forest', 'all'), and land-type restriction
+    # is already handled via landD/aD at the COND level below.
+    dplyr::filter(sp == 1) %>%
     # Drop visits not used in our eval of interest
     dplyr::filter(PLT_CN %in% pops$PLT_CN)
 
@@ -250,6 +262,12 @@ areaStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Total land area in areaDomain and landType, for proportions
     a <- data %>%
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA_DEN.
+      dplyr::filter(!is.na(CONDID)) %>%
       dtplyr::lazy_dt() %>%
       dplyr::mutate(fad = CONDPROP_UNADJ * pDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, fad) %>%

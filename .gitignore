@@ -9,3 +9,7 @@ vignettes/*.html
 vignettes/img/*
 vignettes/white_oak_cache/*
 rFIA.Rproj
+core_references/bechtoldFIA.pdf
+core_references/fia_pop_estimation_user_guide.pdf
+core_references/stanke2021NC.pdf
+core_references/westfall2022USDA.pdf

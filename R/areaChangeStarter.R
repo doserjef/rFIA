@@ -232,16 +232,15 @@ areaChangeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     dplyr::left_join(db$SUBP_COND_CHNG_MTRX, by = c('PLT_CN', 'CONDID')) %>%
     dplyr::left_join(dplyr::select(db$PLOT, PLT_CN, sp, dplyr::all_of(grpP)), 
                      by = c('PREV_PLT_CN' = 'PLT_CN'), suffix = c('2', '1')) %>%
-    dplyr::left_join(dplyr::select(db$COND, PLT_CN, landD, dplyr::all_of(grpC), 
-                     aD, CONDPROP_UNADJ, CONDID), 
-                     by = c('PREV_PLT_CN' = 'PLT_CN', 'PREVCOND' = 'CONDID'), 
+    dplyr::left_join(dplyr::select(db$COND, PLT_CN, landD, COND_STATUS_CD, dplyr::all_of(grpC),
+                     aD, CONDPROP_UNADJ, CONDID),
+                     by = c('PREV_PLT_CN' = 'PLT_CN', 'PREVCOND' = 'CONDID'),
                      suffix = c('2', '1')) %>%
-    dplyr::left_join(db$TREE, by = c('PREV_PLT_CN' = 'PLT_CN', 'PREVCOND' = 'CONDID'), 
+    dplyr::left_join(db$TREE, by = c('PREV_PLT_CN' = 'PLT_CN', 'PREVCOND' = 'CONDID'),
                      suffix = c('2', '1')) %>%
     dplyr::rename(CONDID1 = PREVCOND,
                   CONDID2 = CONDID) %>%
     # Don't want to drop non-treed forestland
-    # TODO: this might lead to some problems when including any filters
     dplyr::mutate(tD1 = tidyr::replace_na(tD1, treeD),
                   tD2 = tidyr::replace_na(tD2, treeD)) %>%
     # Drop all microplot proportions
@@ -255,6 +254,12 @@ areaChangeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                                                TRUE ~ 1)) %>%
     dplyr::filter(dropThese == 1) %>%
     dplyr::select(-c(dropThese)) %>%
+    # Exclude remeasurement pairs where either measurement was nonsampled
+    # (COND_STATUS_CD == 5, e.g. hazardous/denied-access). EVALIDator excludes
+    # these from its area-change population entirely; without this, a forest
+    # condition that later becomes nonsampled (or vice versa) is misclassified
+    # as a genuine forest <-> non-forest diversion/reversion event.
+    dplyr::filter(!(COND_STATUS_CD1 %in% 5 | COND_STATUS_CD2 %in% 5)) %>%
     as.data.frame()
 
   # Set up growth accounting for net change -------------------------------
