@@ -15,11 +15,11 @@ vignette: >
 
 # Introduction
 
-Prior to `rFIA` v0.3.1, the `biomass()` function provided estimates of volume, biomass, and carbon stocks of standing trees. This is what is described in the introductory `rFIA` manuscript ([Stanke et al. 2020](https://research.fs.usda.gov/treesearch/59521). 
+Prior to `rFIA` v0.3.1, the `biomass()` function provided estimates of volume, biomass, and carbon stocks of standing trees. This is what is described in the introductory `rFIA` manuscript ([Stanke et al. 2020](https://research.fs.usda.gov/treesearch/59521).
 
-`rFIA` v0.3.1 introduced breaking changes to the `biomass()` function and how `rFIA` handles volume, carbon, and biomass estimation. Specifically, the `biomass()` function was overhauled to focus solely on estimation of tree biomass and carbon, providing enhanced flexibility in the estimation of *biomass components* (e.g., bole, limbs, coarse roots, etc.). In addition, v0.3.1 gave rise to the `volume()` function, which supersedes and expands upon the previous merchantable volume estimators implemented in `biomass()`.
+`rFIA` v0.3.1 introduced breaking changes to the `biomass()` function and how `rFIA` handles volume, carbon, and biomass estimation. Specifically, the `biomass()` function was overhauled to focus solely on estimation of tree biomass, providing enhanced flexibility in the estimation of *biomass components* (e.g., bole, limbs, coarse roots, etc.). In addition, v0.3.1 gave rise to the `volume()` function, which supersedes and expands upon the previous merchantable volume estimators implemented in `biomass()`. Carbon estimation now lives entirely in the dedicated `carbon()` function, which estimates carbon stocks across the full suite of forest ecosystem carbon pools (e.g., live and dead trees, understory vegetation, down dead wood, litter, soil organic matter), not just standing trees; see `?carbon` for details.
 
-As of `rFIA` v1.1.0, the `biomass()`, `volume()`, and `carbon()` functions now all leverage FIA's new National Scale Volume and Biomass Estimators (NSVB), which provides a more consistent and accurate accounting of structural components of trees. As with previous versions of `biomass()`, estimates can be returned by tree component using the `byComponent` method, although we note the specific components available have changged given underlying changes in FIADB and the NSVB approach. The NSVB represents a substantial advancement in national scale volume and biomass equations, and importantly estimates of carbon now leverage species-specific carbon fractions instead of the previous generic assumption that tree carbon was equal to 50% of tree biomass. Below we provide some basic examples of `biomass()` and `volume()`. 
+As of `rFIA` v1.1.0, the `biomass()` and `volume()` functions now leverage FIA's new National Scale Volume and Biomass Estimators (NSVB), which provides a more consistent and accurate accounting of structural components of trees. As with previous versions of `biomass()`, estimates can be returned by tree component using the `byComponent` method, although we note the specific components available have changged given underlying changes in FIADB and the NSVB approach. The NSVB represents a substantial advancement in national scale volume and biomass equations. Below we provide some basic examples of `biomass()` and `volume()`.
 
 # Estimating tree biomass components
 
@@ -34,7 +34,7 @@ data(fiaRI)
 biomass(fiaRI)
 ```
 
-By default, `biomass` estimates total aboveground live tree biomass for all reporting years available in the `FIA.Database` (`treeType = "live"`, `component = "AG"`). Here aboveground tree biomass is a simple summation of wood biomass in the total stem from ground line to the tree tip, stem bark biomass, and branch wood and bark. Carbon is estimated using species carbon fractions.  
+By default, `biomass` estimates total aboveground live tree biomass for all reporting years available in the `FIA.Database` (`treeType = "live"`, `component = "AG"`). Here aboveground tree biomass is a simple summation of wood biomass in the total stem from ground line to the tree tip, stem bark biomass, and branch wood and bark.
 
 But what if we're interested in estimating biomass within different tree components separately, e.g., we want an individual estimate for bole, foliage, stump, and others? Simply set the new `byComponent` argument to `TRUE`:
 

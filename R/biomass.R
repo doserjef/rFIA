@@ -67,29 +67,23 @@ biomass <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
       dplyr::ungroup() %>%
       dplyr::left_join(aEst, by = aGrpBy) %>%
       dplyr::mutate(BIO_TOTAL = bPlot_mean,
-                    CARB_TOTAL = cPlot_mean,
                     AREA_TOTAL = fa_mean,
                     # Ratios
-                    BIO_ACRE = BIO_TOTAL / AREA_TOTAL, 
-                    CARB_ACRE = CARB_TOTAL / AREA_TOTAL,
+                    BIO_ACRE = BIO_TOTAL / AREA_TOTAL,
                     # Variances
                     BIO_TOTAL_VAR = bPlot_var,
-                    CARB_TOTAL_VAR = cPlot_var,
                     AREA_TOTAL_VAR = fa_var,
                     BIO_ACRE_VAR = ratioVar(bPlot_mean, fa_mean, bPlot_var, fa_var, bPlot_cv),
-                    CARB_ACRE_VAR = ratioVar(cPlot_mean, fa_mean, cPlot_var, fa_var, cPlot_cv),
                     # Sampling errors
                     BIO_TOTAL_SE = sqrt(bPlot_var) / BIO_TOTAL * 100,
-                    CARB_TOTAL_SE = sqrt(cPlot_var) / CARB_TOTAL * 100,
                     AREA_TOTAL_SE = sqrt(fa_var) / AREA_TOTAL * 100,
                     BIO_ACRE_SE = sqrt(BIO_ACRE_VAR) / BIO_ACRE * 100,
-                    CARB_ACRE_SE = sqrt(CARB_ACRE_VAR) / CARB_ACRE * 100,
                     # N plots
                     nPlots_TREE = nPlots.x,
                     nPlots_AREA = nPlots.y) %>%
-      dplyr::select(!!!grpSyms, BIO_ACRE, CARB_ACRE, BIO_TOTAL, CARB_TOTAL, AREA_TOTAL,
-                    BIO_ACRE_VAR, CARB_ACRE_VAR, BIO_TOTAL_VAR, CARB_TOTAL_VAR, AREA_TOTAL_VAR,
-                    BIO_ACRE_SE, CARB_ACRE_SE, BIO_TOTAL_SE, CARB_TOTAL_SE, AREA_TOTAL_SE,
+      dplyr::select(!!!grpSyms, BIO_ACRE, BIO_TOTAL, AREA_TOTAL,
+                    BIO_ACRE_VAR, BIO_TOTAL_VAR, AREA_TOTAL_VAR,
+                    BIO_ACRE_SE, BIO_TOTAL_SE, AREA_TOTAL_SE,
                     nPlots_TREE, nPlots_AREA)
 
     # Drop totals unless told not to

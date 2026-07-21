@@ -44,10 +44,6 @@ Do not use `roxygen2` for package documentation. The man files should be directl
 - Heavy use of dplyr pipes (`%>%`) and tidy-eval (`rlang::enquo`, `!!!`) inside function bodies
 - New functions, arguments, and documentation should follow the standards set by `biomass()`. 
 
-## Design Approach
-
-- 
-
 ## Architecture pattern
 
 Each exported estimator function (e.g. `R/tpa.R`) is a thin dispatcher: it quotes arguments via

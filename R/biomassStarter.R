@@ -130,11 +130,10 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     grpBy <- c(grpBy, 'LON', 'LAT')
   }
 
-  # Join with REF_SPECIES (in intData) to get species-level carbon fractions.
+  # Join with REF_SPECIES (in intData) to get species common/scientific names.
   db$TREE <- db$TREE %>%
-    dplyr::left_join(dplyr::select(intData$REF_SPECIES_DEC_2024, 
-                                   c('SPCD', 'COMMON_NAME', 'GENUS', 'SPECIES', 
-                                     'CARBON_RATIO_LIVE')), 
+    dplyr::left_join(dplyr::select(intData$REF_SPECIES_DEC_2024,
+                                   c('SPCD', 'COMMON_NAME', 'GENUS', 'SPECIES')),
                      by = 'SPCD') %>%
     dplyr::mutate(SCIENTIFIC_NAME = paste(GENUS, SPECIES, sep = ' ')) %>% 
     dplyr::mutate_if(is.factor, character)
@@ -180,9 +179,7 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # Add species to groups
   # Note that intData is an internal data object. 
   if (bySpecies) {
-    # Add species names to grpBy. Note the data was already connected
-    # to REF_SPECIES previously, which is used to pull in the species-specific
-    # carbon fractions regardless of reporting by species.
+    # Add species names to grpBy.
     grpBy <- c(grpBy, 'SPCD', 'COMMON_NAME', 'SCIENTIFIC_NAME')
   }
 
@@ -231,8 +228,8 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
   # TREE ------------------------------
   db$TREE <- db$TREE %>%
-    dplyr::select(PLT_CN, CONDID, DIA, SPCD, TPA_UNADJ, SUBP, TREE, CARBON_RATIO_LIVE, 
-                  dplyr::all_of(grpT), tD, typeD, DRYBIO_STEM, DRYBIO_STEM_BARK, 
+    dplyr::select(PLT_CN, CONDID, DIA, SPCD, TPA_UNADJ, SUBP, TREE,
+                  dplyr::all_of(grpT), tD, typeD, DRYBIO_STEM, DRYBIO_STEM_BARK,
                   DRYBIO_BRANCH, DRYBIO_FOLIAGE, DRYBIO_STUMP, DRYBIO_STUMP_BARK, 
                   DRYBIO_BOLE, DRYBIO_BOLE_BARK, DRYBIO_SAWLOG, DRYBIO_SAWLOG_BARK, 
                   DRYBIO_ROOT = DRYBIO_BG, DRYBIO_AG) %>% 
@@ -257,16 +254,12 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   data$aDI <- data$landD * data$aD * data$sp
   data$tDI <- data$landD * data$aD * data$tD * data$typeD * data$sp
 
-  # Convert to long format, where biomass component is the observation (multiple per tree). 
-  # Also generate carbon column here. 
+  # Convert to long format, where biomass component is the observation (multiple per tree).
   data <- data %>%
     tidyr::pivot_longer(cols = DRYBIO_STEM:DRYBIO_AG,
                         names_to = c(".value", 'COMPONENT'),
                         names_sep = 7) %>%
     dplyr::rename(DRYBIO = DRYBIO_) %>%
-    dplyr::mutate(CARBON = ifelse(COMPONENT != 'FOLIAGE', 
-                                  DRYBIO * CARBON_RATIO_LIVE, 
-                                  NA)) %>%
     dplyr::filter(COMPONENT %in% component)
 
   # Plot-level summaries --------------------------------------------------
@@ -289,17 +282,16 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       # Convert to data frame
       as.data.frame()
 
-    # Biomass and carbon for each plot
-    t <- data %>% 
-      # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::mutate(YEAR = MEASYEAR) %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, COMPONENT, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
-      dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
+    # Biomass for each plot
+    t <- data %>%
+      # Set the YEAR to the measurement year for plot-level estimates.
+      dplyr::mutate(YEAR = MEASYEAR) %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, COMPONENT, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      dplyr::group_by(!!!grpSyms, PLT_CN) %>%
       # 2000 is to convert from pounds/acre to short tons/acre
-      dplyr::summarize(BIO_ACRE = sum(DRYBIO * TPA_UNADJ * tDI, na.rm = TRUE) / 2000, 
-                       CARB_ACRE = sum(CARBON * TPA_UNADJ * tDI, na.rm = TRUE) / 2000) %>% 
-      as.data.frame() %>% 
+      dplyr::summarize(BIO_ACRE = sum(DRYBIO * TPA_UNADJ * tDI, na.rm = TRUE) / 2000) %>%
+      as.data.frame() %>%
       dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>% 
       dplyr::distinct()
 
@@ -330,11 +322,10 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Create list of symols for the grpBy statements
     grpSyms <- rlang::syms(grpBy)
     # Tree list
-    t <- data %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, COMPONENT, .keep_all = TRUE) %>% 
-      dplyr::mutate(bPlot = DRYBIO * TPA_UNADJ * tDI / 2000, 
-                    cPlot = CARBON * TPA_UNADJ * tDI / 2000) %>% 
-      # Need a code that tells us where the tree was measured 
+    t <- data %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, COMPONENT, .keep_all = TRUE) %>%
+      dplyr::mutate(bPlot = DRYBIO * TPA_UNADJ * tDI / 2000) %>%
+      # Need a code that tells us where the tree was measured
       # (macroplot, microplot, subplot)
       dplyr::mutate(
         TREE_BASIS = dplyr::case_when(
@@ -352,8 +343,8 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
           DIA >= MACRO_BREAKPOINT_DIA ~ 'MACR'
         )
       ) %>% 
-      dplyr::filter(!is.na(TREE_BASIS)) %>% 
-      dplyr::select(PLT_CN, TREE_BASIS, SUBP, TREE, !!!grpSyms, bPlot, cPlot) %>% 
+      dplyr::filter(!is.na(TREE_BASIS)) %>%
+      dplyr::select(PLT_CN, TREE_BASIS, SUBP, TREE, !!!grpSyms, bPlot) %>%
       as.data.frame()
 
     # Return a tree/condition list ready to be handed to `customPSE()`
@@ -363,14 +354,13 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
         dtplyr::lazy_dt() %>%
         dplyr::mutate(EVAL_TYP = 'VOL') %>% 
         # Summarize over components so output isn't confusing to end user
-        dplyr::group_by(PLT_CN, EVAL_TYP, TREE_BASIS, AREA_BASIS, 
+        dplyr::group_by(PLT_CN, EVAL_TYP, TREE_BASIS, AREA_BASIS,
                         !!!grpSyms, CONDID, SUBP, TREE, fa) %>%
-        dplyr::summarize(bPlot = sum(bPlot, na.rm = TRUE), 
-                         cPlot = sum(cPlot, na.rm = TRUE)) %>%
+        dplyr::summarize(bPlot = sum(bPlot, na.rm = TRUE)) %>%
         dplyr::ungroup() %>%
-        dplyr::select(PLT_CN, EVAL_TYP, TREE_BASIS, AREA_BASIS, 
-                      !!!grpSyms, CONDID, SUBP, TREE, 
-                      BIO_ACRE = bPlot, CARB_ACRE = cPlot, PROP_FOREST = fa) %>%
+        dplyr::select(PLT_CN, EVAL_TYP, TREE_BASIS, AREA_BASIS,
+                      !!!grpSyms, CONDID, SUBP, TREE,
+                      BIO_ACRE = bPlot, PROP_FOREST = fa) %>%
         as.data.frame()
 
       out <- list(tEst = tEst, aEst = NULL, grpBy = grpBy, aGrpBy = aGrpBy)
