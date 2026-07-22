@@ -284,6 +284,15 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
     # Biomass for each plot
     t <- data %>%
+      # NSVB doesn't model every component for every species -- e.g. woodland
+      # species (pinyon, juniper, oak, mountain-mahogany) have DRYBIO_STEM,
+      # STEM_BARK, BRANCH, STUMP_BARK, BOLE, and BOLE_BARK = NA (not 0),
+      # since they lack the stem/branch architecture those components
+      # describe. Dropping those rows here (scoped to `t`, not `data`, so it
+      # doesn't shrink the `a` area denominator built from the same `data`
+      # above) is a no-op for BIO_ACRE, which already treats them as 0 via
+      # na.rm = TRUE below.
+      dplyr::filter(!is.na(DRYBIO)) %>%
       # Set the YEAR to the measurement year for plot-level estimates.
       dplyr::mutate(YEAR = MEASYEAR) %>%
       dplyr::distinct(PLT_CN, SUBP, TREE, COMPONENT, .keep_all = TRUE) %>%
@@ -312,17 +321,36 @@ biomassStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     aGrpSyms <- rlang::syms(aGrpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA. Drop them, mirroring the `!is.na(TREE_BASIS)` filter
+      # used for the tree list below.
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Create list of symols for the grpBy statements
     grpSyms <- rlang::syms(grpBy)
     # Tree list
     t <- data %>%
+      # NSVB doesn't model every component for every species -- e.g. woodland
+      # species (pinyon, juniper, oak, mountain-mahogany) have DRYBIO_STEM,
+      # STEM_BARK, BRANCH, STUMP_BARK, BOLE, and BOLE_BARK = NA (not 0),
+      # since they lack the stem/branch architecture those components
+      # describe. Dropping those rows here (scoped to `t`, not `data`, so it
+      # doesn't shrink the `a` condition/area list built from the same
+      # `data` above) is a no-op for BIO_ACRE/BIO_ACRE_SE -- sum(bPlot,
+      # na.rm = TRUE) already treats them as 0 -- but keeps such trees from
+      # inflating nPlots_TREE (computed downstream as the count of distinct
+      # PLT_CN in this tree list) for a component they don't contribute to,
+      # which EVALIDator's plot count does not include.
+      dplyr::filter(!is.na(DRYBIO)) %>%
       dplyr::distinct(PLT_CN, SUBP, TREE, COMPONENT, .keep_all = TRUE) %>%
       dplyr::mutate(bPlot = DRYBIO * TPA_UNADJ * tDI / 2000) %>%
       # Need a code that tells us where the tree was measured

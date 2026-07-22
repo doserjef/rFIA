@@ -275,10 +275,17 @@ carbonStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
     # Condition list
     a <- data %>%
-      dplyr::mutate(YEAR = MEASYEAR) %>%  
+      dplyr::mutate(YEAR = MEASYEAR) %>%
       # Will be lots of trees here, so CONDPROP is listed multiple times, the
       # distinct is needed to just get those distinct ones.
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA. Drop them, mirroring the `!is.na(TREE_BASIS)` filter
+      # used for the tree list below.
+      dplyr::filter(!is.na(CONDID)) %>%
       dtplyr::lazy_dt() %>%
       dplyr::mutate(AG_UNDER_LIVE = CONDPROP_UNADJ * CARBON_UNDERSTORY_AG * aDI,
                     BG_UNDER_LIVE = CONDPROP_UNADJ * CARBON_UNDERSTORY_BG * aDI,

@@ -159,9 +159,19 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
   # COND_DWM_CALC ---------------------
   db$COND_DWM_CALC <- db$COND_DWM_CALC %>%
-    dplyr::select(-c(STATECD, COUNTYCD, UNITCD, INVYR, MEASYEAR, PLOT, EVALID)) %>%
-    # Drop visits not used in our eval of interest
-    dplyr::filter(PLT_CN %in% pops$PLT_CN)
+    # A single PLT_CN can appear in COND_DWM_CALC under multiple EVALIDs --
+    # e.g. several consecutive annual panels can each report the same
+    # not-yet-remeasured plot as their most recent DWM data for that plot,
+    # so the same (PLT_CN, CONDID) shows up once per such EVALID, with
+    # near-identical but not always exactly equal ADJ columns (the
+    # adjustment factors are evaluation/stratum-specific). Unlike PLOT/COND
+    # (one row per physical visit, so PLT_CN alone is a safe filter),
+    # restricting to PLT_CN alone here silently keeps every EVALID's copy of
+    # each condition. Semi-joining on (PLT_CN, EVALID) against `pops` first
+    # keeps only the row(s) for the evaluation actually being estimated,
+    # before EVALID is dropped below.
+    dplyr::semi_join(dplyr::select(pops, PLT_CN, EVALID), by = c('PLT_CN', 'EVALID')) %>%
+    dplyr::select(-c(STATECD, COUNTYCD, UNITCD, INVYR, MEASYEAR, PLOT, EVALID))
 
   # Full condition list
   data <- db$PLOT %>%
@@ -252,11 +262,18 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     grpSyms <- rlang::syms(grpBy)
 
     # Condition list
-    a <- data %>% 
+    a <- data %>%
       dplyr::select(PLT_CN, PROP_BASIS, CONDID, CONDPROP_UNADJ, aDI, !!!grpSyms) %>%
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
-      dplyr::distinct() %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
+      dplyr::distinct() %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA. Drop them, mirroring the equivalent guard in
+      # tpaStarter()/biomassStarter()/carbonStarter()/volumeStarter().
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!grpSyms, fa)
 
     # If returning a condition list ready to be handed to customPSE
@@ -325,9 +342,16 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       # been adjusted for non-response in COND_DWM_CALC.
       aPlt <- sumToPlot(a, pops, grpBy)
 
-      # All DWM variables have already been adjusted for non-response, so we can 
+      # All DWM variables have already been adjusted for non-response, so we can
       # just sum them up here instead of sending to sumToPlot
       tPlt <- data %>%
+        # Plots whose conditions were all dropped by the land type/areaDomain
+        # filter upstream (db$COND) survive the PLOT x COND left_join as a
+        # CONDID = NA row. They correctly contribute 0 to VOL/BIO/CARB (via
+        # na.rm = TRUE downstream), but left unfiltered here their PLT_CN
+        # would still be counted in nPlots_DWM, mirroring the equivalent
+        # guard on the `a` condition list above.
+        dplyr::filter(!is.na(CONDID)) %>%
         dplyr::distinct(STRATUM_CN, PLT_CN, CONDID, COND_STATUS_CD, .keep_all = TRUE) %>%
         dtplyr::lazy_dt() %>%
         dplyr::group_by(STRATUM_CN, PLT_CN, !!!grpSyms) %>%
@@ -351,7 +375,7 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                          CARB_1000HR = sum(CWD_CARBON_ADJ * aDI / 2000, na.rm = TRUE),
                          CARB_PILE = sum(PILE_CARBON_ADJ * aDI / 2000, na.rm = TRUE)) %>%
         dplyr::ungroup() %>%
-        dplyr::left_join(dplyr::distinct(dplyr::select(pops, STRATUM_CN, ESTN_UNIT_CN)), 
+        dplyr::left_join(dplyr::distinct(dplyr::select(pops, STRATUM_CN, ESTN_UNIT_CN)),
                          by = 'STRATUM_CN') %>%
         as.data.frame() %>%
         tidyr::pivot_longer(cols = -c(ESTN_UNIT_CN, STRATUM_CN, PLT_CN, !!!grpSyms),
@@ -362,7 +386,21 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                       CARB = CARB) %>%
         dplyr::mutate(FUEL_TYPE = factor(FUEL_TYPE, levels = c('DUFF', 'LITTER',
                                                                '1HR', '10HR', '100HR',
-                                                               '1000HR', 'PILE')))
+                                                               '1000HR', 'PILE'))) %>%
+        # A plot with domain-qualifying, DWM-sampled conditions can still
+        # have exactly zero material for a given fuel type (e.g. no coarse
+        # woody debris at all, even though FWD or litter is present) --
+        # EVALIDator's own per-fuel-type attributes require the relevant
+        # column to be strictly positive to count a plot as contributing,
+        # not just non-missing (confirmed directly against Colorado's raw
+        # COND_DWM_CALC). DUFF/LITTER have no VOL column at all (pivot_longer
+        # leaves it NA for them), so BIO is checked instead for those two;
+        # VOL and BIO are co-zero/co-positive for the other five fuel types
+        # in all but a handful of CWD rows nationally, so checking VOL there
+        # matches EVALIDator's own volume-based attributes exactly rather
+        # than by approximation. This mirrors the equivalent volumeStarter.R
+        # fix (bcf > 0); see volume.md and dwm.md for the full writeup.
+        dplyr::filter(dplyr::if_else(FUEL_TYPE %in% c('DUFF', 'LITTER'), BIO > 0, VOL > 0))
       aGrpBy <- grpBy
       # If by fuel type, add to grpBy
       if (byFuelType) {
@@ -375,7 +413,17 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
           dplyr::group_by(ESTN_UNIT_CN, STRATUM_CN, PLT_CN, !!!grpSyms) %>%
           dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>%
           dplyr::ungroup() %>%
-          as.data.frame()
+          as.data.frame() %>%
+          # A plot can survive the per-fuel-type filter above via DUFF/LITTER
+          # alone (nonzero biomass, but zero total woody-debris volume) --
+          # EVALIDator's "Total volume of DWM" attribute (the one this
+          # collapsed-across-fuel-type total matches) explicitly excludes
+          # duff/litter from its definition, so such a plot should not count
+          # here even though it correctly counts in the DUFF/LITTER-specific
+          # byFuelType = TRUE rows. Re-check the now-collapsed VOL total
+          # (duff/litter never contribute to VOL, so this is exactly the
+          # FWD + CWD + pile total) directly.
+          dplyr::filter(VOL > 0)
       }
 
       # Adding YEAR to groups

@@ -251,10 +251,25 @@ volumeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       as.data.frame()
 
     # Volume estimates for each plot
-    t <- data %>% 
-      # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::mutate(YEAR = MEASYEAR) %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
+    t <- data %>%
+      # VOLCFNET (bcf) is only populated for trees at least 5in DBH (timber
+      # species) or the woodland-species DRC equivalent -- e.g. small dead
+      # trees never get a bole volume computed. VOLCSNET/VOLBFNET (scf/sbf)
+      # are never non-NA when bcf is NA (sawlog volume is a subset of total
+      # bole volume), so filtering on bcf alone is sufficient. A tree can
+      # also have a defined but exactly-zero net volume (a 100% defect
+      # deduction) -- EVALIDator's own attribute definitions require
+      # VOLCFNET > 0, not just non-missing, to count as a contributing tree,
+      # so bcf <= 0 is excluded too. Dropping these rows here (scoped to
+      # `t`, not `data`, so it doesn't shrink the `a` area denominator built
+      # from the same `data` above) is a no-op for
+      # BOLE_CF_ACRE/SAW_CF_ACRE/SAW_MBF_ACRE, which already treat them as 0
+      # via na.rm = TRUE below, but keeps such trees from inflating
+      # nPlots_TREE for a plot that otherwise has no tree with any volume.
+      dplyr::filter(!is.na(bcf) & bcf > 0) %>%
+      # Set the YEAR to the measurement year for plot-level estimates.
+      dplyr::mutate(YEAR = MEASYEAR) %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
       dtplyr::lazy_dt() %>% 
       dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
       dplyr::summarize(BOLE_CF_ACRE = sum(bcf * TPA_UNADJ * tDI, na.rm = TRUE), 
@@ -281,21 +296,45 @@ volumeStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     aGrpSyms <- syms(aGrpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA. Drop them, mirroring the `!is.na(TREE_BASIS)` filter
+      # used for the tree list below.
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Create list of symbols for the grpBy statements
     grpSyms <- syms(grpBy)
     # Tree list
-    t <- data %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
-      dplyr::mutate(bcf = bcf * TPA_UNADJ * tDI, 
-                    scf = scf * TPA_UNADJ * tDI, 
+    t <- data %>%
+      # VOLCFNET (bcf) is only populated for trees at least 5in DBH (timber
+      # species) or the woodland-species DRC equivalent -- e.g. small dead
+      # trees never get a bole volume computed. VOLCSNET/VOLBFNET (scf/sbf)
+      # are never non-NA when bcf is NA (sawlog volume is a subset of total
+      # bole volume), so filtering on bcf alone is sufficient. A tree can
+      # also have a defined but exactly-zero net volume (a 100% defect
+      # deduction) -- EVALIDator's own attribute definitions require
+      # VOLCFNET > 0, not just non-missing, to count as a contributing tree,
+      # so bcf <= 0 is excluded too. Dropping these rows here (scoped to
+      # `t`, not `data`, so it doesn't shrink the `a` condition/area list
+      # built from the same `data` above) is a no-op for
+      # BOLE_CF_ACRE/SAW_CF_ACRE/SAW_MBF_ACRE -- sum(..., na.rm = TRUE)
+      # already treats them as 0 -- but keeps such trees from inflating
+      # nPlots_TREE (computed downstream as the count of distinct PLT_CN in
+      # this tree list) for a plot that otherwise has no tree with any
+      # defined volume.
+      dplyr::filter(!is.na(bcf) & bcf > 0) %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
+      dplyr::mutate(bcf = bcf * TPA_UNADJ * tDI,
+                    scf = scf * TPA_UNADJ * tDI,
                     sbf = sbf * TPA_UNADJ * tDI / 1000) %>%
       # Need a code that tells us where the tree was measured 
       # (macroplot, microplot, subplot)

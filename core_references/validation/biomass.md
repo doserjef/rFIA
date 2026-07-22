@@ -127,26 +127,62 @@ validation pass -- see `tpa.md`, "Fixed" #2). **Pass**, no regression.
 
 ## Fixed
 
-None. No numeric discrepancies were found against EVALIDator across any of the cases checked above,
-and the `component = 'TOTAL'` internal-consistency check confirms the v1.1.3 fix (`biomass()`
-component double-counting) is still holding.
+**`nPlots_TREE` over-counted plots for component-restricted queries in woodland-heavy states.**
+When `tests/testthat/test-biomass.R` Tests 12-15 were extended to also check `nPlots_TREE`/
+`nPlots_AREA` (not just point estimates and SEs) for every `component` variant, RI/NC/OR matched
+EVALIDator exactly everywhere, but **Colorado** failed `nPlots_TREE` for `component = 'BRANCH'`,
+`'STEM'`, `'STEM_BARK'`, `'STUMP_BARK'`, and `c('BOLE', 'BOLE_BARK')` (all restricted to `DIA >= 5`
+merch. components except `BRANCH`). `BIO_ACRE`/`BIO_ACRE_SE` matched exactly in every one of these
+failing rows -- only the plot count was wrong. A follow-up check against **Arizona** and **Utah**
+(not part of the original 4-region matrix, but heavy in pinyon-juniper woodland) showed the same
+issue far more severely:
+
+| State | Component (attr) | `nPlots_TREE` (before fix) | EVALIDator `numPlotCount` |
+|---|---|---|---|
+| CO | `BRANCH` (11032) | 3774 | 2530 |
+| CO | `STEM`, DIA>=5 (11016) | 3676 | 2491 |
+| AZ | `BRANCH` (11032) | 3137 | 842 |
+| AZ | `STEM`, DIA>=5 (11016) | 3113 | 819 |
+| UT | `BRANCH` (11032) | 2932 | 1021 |
+| UT | `STEM`, DIA>=5 (11016) | 2850 | 993 |
+
+**Root cause**: NSVB does not model `STEM`, `STEM_BARK`, `STUMP_BARK`, `BOLE`, `BOLE_BARK`, or
+`BRANCH` for woodland-form species (e.g. pinyon, juniper, Gambel oak, curlleaf mountain-mahogany --
+SPCD 65, 106, 814, 66, 69, 475 in Colorado), so `TREE.DRYBIO_<component>` is `NA` for those species,
+not 0. In `biomassStarter.R`, the long-format `data` frame (one row per tree x component, filtered
+to the requested `component`(s)) fed these `NA`-valued rows straight into the per-tree table `t`/
+`tPlt`. `sum(bPlot, na.rm = TRUE)` correctly zeroed out their contribution to `BIO_ACRE` (hence the
+point estimate/SE always matched), but `nPlots_TREE` (computed downstream in `sumToEU()` as
+`length(unique(PLT_CN))` over that same tree table) still counted a plot whose only tallied trees
+were woodland species that don't model the requested component, which EVALIDator's own plot count
+excludes. `AG`, `ROOT`, and `FOLIAGE` are modeled for every species (including woodland form), so
+the core default case and those components were never affected.
+
+**Fix**: added `dplyr::filter(!is.na(DRYBIO))` in `biomassStarter.R`, scoped to the tree-side
+pipeline that builds `t`/`tPlt` (in both the `byPlot` and population-estimation branches) -- *not*
+to the shared upstream `data` object, since the condition/area table `a` is also built from `data`
+and would otherwise have qualifying conditions silently dropped whenever their only tallied trees
+lacked the requested component (this was tried first and caused `BIO_ACRE` itself to drift off of
+EVALIDator by up to ~50%, e.g. Arizona `STEM` going from an exact match to 20.49 vs. a true value of
+4.95 -- a genuine regression, caught by rerunning the full numeric suite before treating the fix as
+done). After the scoped fix, `nPlots_TREE` matches EVALIDator exactly in CO/AZ/UT for every
+component tested, and `BIO_ACRE`/`BIO_ACRE_SE` are unchanged (confirmed identical to pre-fix values
+in RI/NC/CO/OR/AZ/UT). `carbon()` and `volume()` were checked and do not share this bug: `carbon()`
+always sums all of `CARBON_AG`/`CARBON_BG`/etc. before ever building its area/tree tables (no
+`component`-driven pre-filter of the shared join), and `volume()` has no `component` argument at
+all.
 
 ## Notes
 
-### Why this pass found nothing new
+### Why the original pass found nothing (and this one did)
 
-Unlike `tpa()` (three bugs found) and `area()`/`areaChange()` (four bugs found), this pass found no
-discrepancies. The most likely explanation is that `biomass()` shares essentially all of its
-join/filter/domain-indicator/population-estimation machinery with `tpa()`
-(`treeTypeDomain()`, `landTypeDomain()`, `udAreaDomain()`/`udTreeDomain()`, `sumToPlot()`,
-`sumToEU()`, `combineMR()`) -- so the bugs already found and fixed during the `tpa()`/`area()`
-validation passes (the `nPlots_AREA` phantom-row bug, the empty-domain `max()` warning, and the
-`treeType = 'dead'`/`STANDING_DEAD_CD` definition) were already fixed upstream in those shared
-utilities before this pass began, and `biomass()` inherited the fixes automatically. The
-component-specific logic that's unique to `biomass()` (the `DRYBIO_*` pivot and the `component`/
-`byComponent` domain filtering) is comparatively simple -- a filter on a pre-computed FIADB column
-rather than a new estimator -- which likely explains why it didn't introduce a new class of bug on
-its own.
+The original validation pass (documented above) exercised `component` variants across only 4
+states (RI, NC, CO, OR) and checked `BIO_ACRE`/`BIO_ACRE_SE` but not `nPlots_TREE`/`nPlots_AREA` for
+most of them -- so the bug above was present but invisible: CO's discrepancy would have shown up
+only in a `nPlots_TREE` assertion, which hadn't been added yet, and RI/NC/OR have essentially no
+woodland-form species so no discrepancy exists there regardless. Extending the tests to check
+sampling error and plot-count columns for every `component` variant (not just the core default
+case) is what surfaced it.
 
 ## Deferred to follow-up (not covered this pass)
 

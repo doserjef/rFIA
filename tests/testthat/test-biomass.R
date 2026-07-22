@@ -181,7 +181,8 @@ for (st in states) {
 # component = 'ROOT'), 11020 (forest land/live/foliage, i.e. component =
 # 'FOLIAGE'), 11032 (forest land/live/branch (>= 1in), i.e. component =
 # 'BRANCH'). All ratio'd against the matching area attribute (3 =
-# timberland, 2 = forest land).
+# timberland, 2 = forest land). Point estimates, percent SEs, and both plot
+# counts (nPlots_TREE, nPlots_AREA) are all checked for each variant.
 for (st in states) {
   db_st <- dbs[[st]]
   wc_st <- wcs[[st]]
@@ -191,30 +192,44 @@ for (st in states) {
     out <- as.data.frame(biomass(db_st, landType = 'timber'))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
     expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for treeType = 'dead' (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 11266, sdenom = 2)
     out <- as.data.frame(biomass(db_st, treeType = 'dead'))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for component = 'ROOT' (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 59, sdenom = 2)
     out <- as.data.frame(biomass(db_st, component = 'ROOT'))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for component = 'FOLIAGE' (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 11020, sdenom = 2)
     out <- as.data.frame(biomass(db_st, component = 'FOLIAGE'))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for component = 'BRANCH' (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 11032, sdenom = 2)
     out <- as.data.frame(biomass(db_st, component = 'BRANCH'))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 }
 
@@ -225,7 +240,15 @@ for (st in states) {
 # apples-to-apples comparison (this doubles as a treeDomain interaction
 # check). EVALIDator attributes 11016 (total-stem wood), 11017 (total-stem
 # bark), 11018 (stump bark), 11019 (merch. bole bark); 11000 (merch. bole
-# wood + bark combined) is checked against BOLE + BOLE_BARK summed.
+# wood + bark combined) is checked against a single component = c('BOLE',
+# 'BOLE_BARK') call -- rather than summing two separate biomass() calls --
+# because biomassStarter() sums DRYBIO across requested components at the
+# tree level *before* population estimation (see the pivot_longer + filter
+# in biomassStarter.R), so a single combined call is the only way to get a
+# BIO_ACRE_SE/nPlots that's actually comparable to EVALIDator's combined-
+# attribute SE; summing two independently-estimated SEs would ignore their
+# covariance and not match. Point estimates, percent SEs, and both plot
+# counts are all checked for each variant.
 for (st in states) {
   db_st <- dbs[[st]]
   wc_st <- wcs[[st]]
@@ -234,36 +257,48 @@ for (st in states) {
     ref <- fetchRef(wc = wc_st, snum = 11016, sdenom = 2)
     out <- as.data.frame(biomass(db_st, component = 'STEM', treeDomain = DIA >= 5))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for component = 'STEM_BARK', DIA >= 5 (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 11017, sdenom = 2)
     out <- as.data.frame(biomass(db_st, component = 'STEM_BARK', treeDomain = DIA >= 5))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for component = 'STUMP_BARK', DIA >= 5 (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 11018, sdenom = 2)
     out <- as.data.frame(biomass(db_st, component = 'STUMP_BARK', treeDomain = DIA >= 5))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for component = c('BOLE', 'BOLE_BARK'), DIA >= 5 (", st, ")"), {
     ref <- fetchRef(wc = wc_st, snum = 11000, sdenom = 2)
-    outBole <- as.data.frame(biomass(db_st, component = 'BOLE', treeDomain = DIA >= 5))
-    outBoleBark <- as.data.frame(biomass(db_st, component = 'BOLE_BARK', treeDomain = DIA >= 5))
-    expect_equal(outBole$BIO_ACRE + outBoleBark$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    out <- as.data.frame(biomass(db_st, component = c('BOLE', 'BOLE_BARK'), treeDomain = DIA >= 5))
+    expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 }
 
 # Test 14 ------------------------------
 # Domain filter interactions across all four FIA regions. treeDomain matched
 # against EVALIDator's `wnum` (numerator-only filter, since a tree-level
-# domain should not change the area denominator); areaDomain matched against
-# `strFilter` (applies to numerator AND denominator, since an area-level
-# domain should shrink both). Both filters here (large-diameter trees, mesic
-# physiographic classes) use nationally-defined codes so the same filter is
-# meaningful in every region.
+# domain should not change the area denominator, so only nPlots_TREE is
+# checked -- nPlots_AREA is unaffected by construction); areaDomain matched
+# against `strFilter` (applies to numerator AND denominator, since an
+# area-level domain should shrink both, so both plot counts are checked).
+# Both filters here (large-diameter trees, mesic physiographic classes) use
+# nationally-defined codes so the same filter is meaningful in every region.
 for (st in states) {
   db_st <- dbs[[st]]
   wc_st <- wcs[[st]]
@@ -272,6 +307,8 @@ for (st in states) {
     ref <- fetchRef(wc = wc_st, snum = 10, sdenom = 2, wnum = "TREE.DIA >= 20")
     out <- as.data.frame(biomass(db_st, treeDomain = DIA >= 20))
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
   })
 
   test_that(paste("biomass() matches EVALIDator for areaDomain (physiographic class filter) (", st, ")"), {
@@ -279,6 +316,9 @@ for (st in states) {
                      strFilter = "COND.PHYSCLCD in (21,22,23,24,25,26,27,28,29)")
     out <- as.data.frame(biomass(db_st, areaDomain = PHYSCLCD %in% 21:29)) # mesic classes
     expect_equal(out$BIO_ACRE, ref$ratioEstimate, tolerance = 1e-6)
+    expect_equal(out$BIO_ACRE_SE, ref$ratioSEPercent, tolerance = 1e-6)
+    expect_equal(out$nPlots_TREE, ref$numPlotCount)
+    expect_equal(out$nPlots_AREA, ref$denPlotCount)
   })
 }
 
@@ -289,6 +329,10 @@ for (st in states) {
 # being silently dropped for some groups (the historical area()/areaChange()
 # bug pattern from v1.1.1). RI only, and only a random sample of species
 # (rather than all of them), to keep this test's live API call volume small.
+# nPlots_TREE is checked in addition to the point estimate since it's the
+# plot count most likely to be silently wrong if a per-species filter were
+# dropped during the grpBy join (nPlots_AREA is unaffected by a
+# species-level treeDomain, so isn't checked here).
 test_that("biomass() bySpecies matches EVALIDator per-species (RI)", {
   out <- as.data.frame(biomass(db_ri, bySpecies = TRUE))
   set.seed(42)
@@ -298,5 +342,7 @@ test_that("biomass() bySpecies matches EVALIDator per-species (RI)", {
                      wnum = paste0("TREE.SPCD = ", sampled$SPCD[i]))
     expect_equal(sampled$BIO_ACRE[i], ref$ratioEstimate, tolerance = 1e-6,
                  label = paste0("BIO_ACRE (SPCD ", sampled$SPCD[i], ")"))
+    expect_equal(sampled$nPlots_TREE[i], ref$numPlotCount,
+                 label = paste0("nPlots_TREE (SPCD ", sampled$SPCD[i], ")"))
   }
 })
