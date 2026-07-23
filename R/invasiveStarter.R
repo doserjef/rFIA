@@ -216,20 +216,34 @@ invasiveStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       as.data.frame()
 
     # Areal invasive coverage
-    t <- data %>% 
-      # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::mutate(YEAR = MEASYEAR) %>% 
+    t <- data %>%
+      # Set the YEAR to the measurement year for plot-level estimates.
+      dplyr::mutate(YEAR = MEASYEAR) %>%
       dplyr::filter(!is.na(SYMBOL)) %>%
-      dplyr::distinct(PLT_CN, CONDID, SUBP, VEG_SPCD, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
-      dplyr::group_by(!!!grpSyms, PLT_CN, SUBP) %>%  
-      dplyr::summarize(cover = sum(COVER_PCT / 100 * SUBPCOND_PROP * aDI, na.rm = TRUE)) %>% 
+      dplyr::distinct(PLT_CN, CONDID, SUBP, VEG_SPCD, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      # Dividing by a fixed 4 (not averaging only over the subplots where
+      # this species happened to be recorded) matches the
+      # population-estimation branch's formula below -- a species absent
+      # from a given subplot contributes 0 cover there, not a missing
+      # observation to be excluded from the average. The previous
+      # `mean(cover, na.rm = TRUE)` treated an undetected subplot as missing
+      # rather than 0, inflating PROP_INV_COVER by up to 16x for a species
+      # only detected on 1 of 4 subplots (confirmed against raw
+      # INVASIVE_SUBPLOT_SPP/SUBP_COND data for a Rhode Island plot).
+      # Unlike the population-estimation branch, CONDPROP_UNADJ is *not*
+      # folded into this per-plot cover value -- it's reported separately as
+      # PROP_FOREST (via the left_join with `a` below), the same split
+      # biomassStarter()'s byPlot branch uses for BIO_ACRE/PROP_FOREST, so
+      # PROP_INV_COVER stays an unadjusted, directly-interpretable cover
+      # fraction rather than one already discounted by how much of the plot
+      # is forest.
+      dplyr::group_by(!!!grpSyms, PLT_CN) %>%
+      dplyr::summarize(PROP_INV_COVER = sum(COVER_PCT / 100 * SUBPCOND_PROP * aDI,
+                                            na.rm = TRUE) / 4) %>%
       dplyr::ungroup() %>%
-      dplyr::group_by(PLT_CN, !!!grpSyms) %>%
-      dplyr::summarize(PROP_INV_COVER = mean(cover, na.rm = TRUE)) %>%
-      dplyr::ungroup() %>%
-      as.data.frame() %>% 
-      dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>% 
+      as.data.frame() %>%
+      dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>%
       dplyr::distinct()
 
     # Make it spatial if the user wants it.
@@ -249,22 +263,44 @@ invasiveStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     aGrpSyms <- syms(aGrpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA row.
+      # They correctly contribute 0 area (via na.rm = TRUE downstream), but
+      # left unfiltered here their PLT_CN would still be counted in
+      # nPlots_AREA. Drop them, mirroring the equivalent guard in
+      # tpaStarter()/biomassStarter()/carbonStarter()/volumeStarter()/
+      # dwmStarter().
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Create list of symols for the grpBy statements
     grpSyms <- syms(grpBy)
     # Tree list
-    t <- data %>% 
-      dplyr::distinct(PLT_CN, CONDID, SUBP, VEG_SPCD, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
+    t <- data %>%
+      # A plot/condition with no invasive species detected at all (or,
+      # equivalently, one whose only INVASIVE_SUBPLOT_SPP rows were dropped
+      # entirely by an areaDomain/landType restriction upstream) survives the
+      # left_join as a SYMBOL = NA row. Since SYMBOL is part of grpSyms, this
+      # becomes its own "phantom species" group, which is silently dropped
+      # later by invasive()'s top-level `tidyr::drop_na(grpBy)` in the
+      # ordinary case -- but when *every* species group is empty (e.g. an
+      # areaDomain matching no data), this phantom group survives as the
+      # only row(s) in tEst, with an all-NA YEAR, which breaks the
+      # empty-domain contract established for every other estimator
+      # (`combineMR()`'s own 0-row guard doesn't catch it, since nrow(x) > 0
+      # here). Dropping it here, mirroring the equivalent filter already
+      # used in the byPlot branch above, avoids computing it at all.
+      dplyr::filter(!is.na(SYMBOL)) %>%
+      dplyr::distinct(PLT_CN, CONDID, SUBP, VEG_SPCD, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
       dplyr::group_by(!!!grpSyms, PLT_CN, PROP_BASIS, CONDID) %>%
-      dplyr::summarize(cover = sum(COVER_PCT / 100 * SUBPCOND_PROP * aDI * CONDPROP_UNADJ, 
+      dplyr::summarize(cover = sum(COVER_PCT / 100 * SUBPCOND_PROP * aDI * CONDPROP_UNADJ,
                                    na.rm = TRUE) / 4) %>%
       dplyr::ungroup() %>%
       dplyr::rename(AREA_BASIS = PROP_BASIS) %>%

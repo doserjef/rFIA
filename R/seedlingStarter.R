@@ -217,13 +217,19 @@ seedlingStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       # Convert to data frame
       as.data.frame()
 
-    t <- data %>% 
-      # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::mutate(YEAR = MEASYEAR) %>% 
-      dplyr::distinct(PLT_CN, SUBP, SPCD, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
-      dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
-      dplyr::summarize(TPA = sum(TPA_UNADJ * tDI, na.rm = TRUE)) %>% 
+    t <- data %>%
+      # Set the YEAR to the measurement year for plot-level estimates.
+      dplyr::mutate(YEAR = MEASYEAR) %>%
+      # Unlike TREE, SEEDLING has no per-stem ID -- TPA_UNADJ is already
+      # aggregated to the PLT_CN/SUBP/CONDID/SPCD grain. A subplot that
+      # straddles two conditions can have separate SEEDLING rows for the
+      # same SUBP/SPCD under each CONDID; CONDID must be part of the
+      # distinct() key or the second condition's seedlings are silently
+      # dropped (see seedling.md).
+      dplyr::distinct(PLT_CN, SUBP, CONDID, SPCD, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      dplyr::group_by(!!!grpSyms, PLT_CN) %>%
+      dplyr::summarize(TPA = sum(TPA_UNADJ * tDI, na.rm = TRUE)) %>%
       dplyr::ungroup() %>%
       as.data.frame() %>% 
       dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>% 
@@ -246,22 +252,35 @@ seedlingStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     aGrpSyms <- syms(aGrpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA
+      # row (same phantom-row pattern as tpa()/area()/biomass()/etc). Drop
+      # them so nPlots_AREA doesn't count them as contributing plots.
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Create list of symols for the grpBy statements
     grpSyms <- syms(grpBy)
     # Tree list
-    t <- data %>% 
-      dplyr::distinct(PLT_CN, SUBP, SPCD, .keep_all = TRUE) %>% 
-      dplyr::mutate(tPlot = TPA_UNADJ * tDI, 
-                    TREE_BASIS = 'MICR') %>% 
-      dplyr::select(PLT_CN, TREE_BASIS, SPCD, !!!grpSyms, tPlot) %>% 
+    t <- data %>%
+      # See the byPlot branch above for why CONDID must be part of the
+      # distinct() key for SEEDLING (unlike TREE, which has a per-stem ID).
+      dplyr::distinct(PLT_CN, SUBP, CONDID, SPCD, .keep_all = TRUE) %>%
+      # A plot/condition with no seedlings recorded at all survives the
+      # SEEDLING join as an SPCD = NA phantom row (TREE_BASIS is a constant
+      # here, so it can't catch this the way tpa()'s DIA-derived TREE_BASIS
+      # does). Drop it so nPlots_TREE reflects plots with at least one
+      # qualifying seedling, matching EVALIDator's numerator plot count.
+      dplyr::filter(!is.na(SPCD)) %>%
+      dplyr::mutate(tPlot = TPA_UNADJ * tDI,
+                    TREE_BASIS = 'MICR') %>%
+      dplyr::select(PLT_CN, TREE_BASIS, SPCD, !!!grpSyms, tPlot) %>%
       as.data.frame()
 
     # Return a tree/condition list ready to be handed to `customPSE()`

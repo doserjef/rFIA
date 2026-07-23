@@ -81,9 +81,8 @@ Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}
 
 \itemize{
       \item{\strong{YEAR}: reporting year associated with estimates}
-      \item{\strong{TPA}: estimate of mean trees per acre}
-      \item{\strong{TPA_PERC}: estimate of mean proportion of live trees falling within the domain of interest, with respect to trees per acre}
-      \item{\strong{nPlots_SEEDLING}: number of non-zero plots used to compute tpa estimates}
+      \item{\strong{TPA}: estimate of mean number of live seedlings per acre}
+      \item{\strong{nPlots_TREE}: number of non-zero plots used to compute seedling per acre estimates}
       \item{\strong{nPlots_AREA}: number of non-zero plots used to compute land area estimates}
       }
 }
