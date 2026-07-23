@@ -90,6 +90,8 @@ Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}
       \item{\strong{S_a}: mean Species Richness, alpha (stand) level}
       \item{\strong{S_b}: Species Richness, beta (landscape) level}
       \item{\strong{S_g}: Species Richness, gamma (regional) level}
+      \item{\strong{nPlots_TREE}: number of non-zero plots used to compute alpha diversity estimates}
+      \item{\strong{nPlots_AREA}: number of non-zero plots used to compute land area estimates}
       }
 }
 
@@ -113,7 +115,7 @@ Shannon, C. E. (1948). A Mathematical Theory of Communication. Bell System Techn
 Jeffrey W. Doser, Hunter Stanke, Andrew Finley
 }
 
-\note{All percent sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. To determine the margin of error for confidence intervals, use the following formula, t * (SE * mean / 100), where t is the corresponding t value for your desired level of confidence (e.g., approximately 2 for a 95\% confidence interval). To determine the degrees of freedom for the t value, use \code{nStands}. Alternatively, you can use a normal approximation for the confidence interval. The validity of the normal approximation decreases as the sample size decreases.}
+\note{All percent sampling error estimates (SE) are returned as the "percent coefficient of variation" (standard deviation / mean * 100) for consistency with EVALIDator. To determine the margin of error for confidence intervals, use the following formula, t * (SE * mean / 100), where t is the corresponding t value for your desired level of confidence (e.g., approximately 2 for a 95\% confidence interval). To determine the degrees of freedom for the t value, use \code{nPlots_AREA}. Alternatively, you can use a normal approximation for the confidence interval. The validity of the normal approximation decreases as the sample size decreases.}
 
 \examples{
 \dontshow{

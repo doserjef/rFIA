@@ -158,8 +158,21 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   grpC <- names(db$COND)[names(db$COND) %in% grpBy & 
                          !c(names(db$COND) %in% grpP)]
   # grpBy names in TREE
-  grpT <- names(db$TREE)[names(db$TREE) %in% grpBy & 
+  grpT <- names(db$TREE)[names(db$TREE) %in% grpBy &
                          !c(names(db$TREE) %in% c(grpP, grpC))]
+
+  # Separate area grouping names from tree grouping names (grpBy may include
+  # TREE-table-only variables like bySizeClass's 'sizeClass', or a user-
+  # supplied grpBy referencing a TREE column -- those must not be part of
+  # the condition list's own grouping, or a condition's area gets collapsed
+  # into whichever one of those bins happens to come first per (PLT_CN,
+  # CONDID), instead of being repeated across every bin its trees actually
+  # belong to; see diversity.md).
+  if (!is.null(polys)) {
+    aGrpBy <- grpBy[grpBy %in% c(names(db$PLOT), names(db$COND), names(polys))]
+  } else {
+    aGrpBy <- grpBy[grpBy %in% c(names(db$PLOT), names(db$COND))]
+  }
 
   # PLOT ------------------------------
   db$PLOT <- db$PLOT %>%
@@ -203,63 +216,88 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     grpBy <- c('YEAR', grpBy)
     # Create a list of symbols for the grpBy statements
     grpSyms <- rlang::syms(grpBy)
+    aGrpSyms <- rlang::syms(aGrpBy)
 
     # Plot-level estimates
     # Area
-    a <- data %>% 
+    a <- data %>%
       dplyr::mutate(YEAR = MEASYEAR) %>%
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
       # Convert to a lazy data table for quicker analysis.
-      dtplyr::lazy_dt() %>% 
-      # Note the use of !!! to inject GrpSyms back into an evaluation context.
-      dplyr::group_by(PLT_CN, !!!grpSyms) %>%
-      # Calculate proportion of area in the plot that meets the current area domain 
+      dtplyr::lazy_dt() %>%
+      # Note the use of !!! to inject aGrpSyms back into an evaluation context.
+      dplyr::group_by(PLT_CN, !!!aGrpSyms) %>%
+      # Calculate proportion of area in the plot that meets the current area domain
       dplyr::summarize(PROP_FOREST = sum(CONDPROP_UNADJ * aDI, na.rm = TRUE)) %>%
       # Convert to data frame
       as.data.frame()
 
     # Diversity estimates
-    t <- data %>% 
-      # Set the YEAR to the measurement year for plot-level estimates. 
-      dplyr::mutate(YEAR = MEASYEAR) %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
-      dtplyr::lazy_dt() %>% 
-      dplyr::group_by(!!!grpSyms, PLT_CN) %>%  
+    t <- data %>%
+      # Set the YEAR to the measurement year for plot-level estimates.
+      dplyr::mutate(YEAR = MEASYEAR) %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      dplyr::group_by(!!!grpSyms, PLT_CN) %>%
       dplyr::summarize(H = divIndex(grp, state * tDI, index = 'H'),
                        S = divIndex(grp, state * tDI, index = 'S'),
                        Eh = divIndex(grp, state * tDI, index = 'Eh')) %>%
-      as.data.frame() %>% 
-      dplyr::left_join(a, by = c('PLT_CN', grpBy)) %>% 
+      as.data.frame() %>%
+      dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>%
       dplyr::distinct()
 
     # Make it spatial if the user wants it.
     if (returnSpatial) {
-      t <- t %>% 
-        dplyr::filter(!is.na(LAT) & !is.na(LON)) %>% 
-        sf::st_as_sf(coords = c('LON', 'LAT'), 
+      t <- t %>%
+        dplyr::filter(!is.na(LAT) & !is.na(LON)) %>%
+        sf::st_as_sf(coords = c('LON', 'LAT'),
                      crs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')
       grpBy <- grpBy[grpBy %in% c('LAT', 'LON') == FALSE]
     }
 
-    out <- list(tEst = t, grpBy = grpBy)
+    out <- list(tEst = t, grpBy = grpBy, aGrpBy = aGrpBy)
 
   } else {
     # Population estimation or prep for it (treeList) ---------------------
     # Create a list of symbols for the grpBy statements
     grpSyms <- syms(grpBy)
+    aGrpSyms <- syms(aGrpBy)
 
     # Condition list
-    a <- data %>% 
-      # Will be lots of trees here, so CONDPROP is listed multiple times, the 
-      # distinct is needed to just get those distinct ones. 
+    a <- data %>%
+      # Will be lots of trees here, so CONDPROP is listed multiple times, the
+      # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
-      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>% 
-      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>% 
-      dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!grpSyms, fa)
+      dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA
+      # row (same phantom-row pattern as tpa()/area()/biomass()/seedling()/
+      # standStruct()/etc). Drop them so nPlots_AREA doesn't count them as
+      # contributing plots.
+      dplyr::filter(!is.na(CONDID)) %>%
+      dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
+      # Group by aGrpSyms (not grpSyms): grpBy may include TREE-table-only
+      # variables (bySizeClass's 'sizeClass', a user-supplied TREE column)
+      # that aren't constant per condition, so including them here would
+      # collapse a condition's area into just one arbitrary bin instead of
+      # repeating it across every bin its trees belong to (see diversity.md).
+      dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Tree list
-    t <- data %>% 
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>% 
+    t <- data %>%
+      # CONDID must be part of the distinct() key: a condition with no
+      # qualifying trees survives the TREE join as a SUBP = NA/TREE = NA
+      # phantom row, and a plot with *two or more* such zero-tree
+      # conditions would otherwise have all but one collapsed together
+      # (SUBP/TREE alone can't tell them apart), silently dropping that
+      # condition's data from the condList output (see standStruct.md for
+      # the identical bug pattern; diversity.md for why this doesn't
+      # change population-level point estimates here).
+      dplyr::distinct(PLT_CN, SUBP, CONDID, TREE, .keep_all = TRUE) %>%
+      # A plot with no conditions passing the land type/areaDomain filter
+      # would otherwise still get an H = S = 0 (from divIndex()'s
+      # empty-species fallback) rather than a genuinely empty result.
+      dplyr::filter(!is.na(CONDID)) %>%
       dplyr::mutate(AREA_BASIS = PROP_BASIS) %>%
       dplyr::group_by(PLT_CN, CONDID, !!!grpSyms, CONDPROP_UNADJ, aDI, AREA_BASIS) %>%
       dplyr::summarize(H = divIndex(grp, state  * tDI, index = 'H'),
@@ -272,28 +310,29 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Return a condition list ready to be handed to customPSE
     if (condList) {
       tEst <- a %>%
-        dplyr::left_join(t, by = c('PLT_CN', 'CONDID', 'AREA_BASIS', grpBy)) %>%
+        dplyr::left_join(t, by = c('PLT_CN', 'CONDID', 'AREA_BASIS', aGrpBy)) %>%
         dplyr::mutate(EVAL_TYP = 'VOL') %>%
-        dplyr::select(PLT_CN, EVAL_TYP, AREA_BASIS, !!!grpSyms, CONDID, H:Eh, 
+        dplyr::select(PLT_CN, EVAL_TYP, AREA_BASIS, !!!grpSyms, CONDID, H:Eh,
                       PROP_FOREST = fa)
 
-      out <- list(tEst = tEst, aEst = NULL, grpBy = grpBy, full = NULL)
+      out <- list(tEst = tEst, aEst = NULL, grpBy = grpBy, aGrpBy = aGrpBy, full = NULL)
     } else {
 
       # If a tree list is not desired, let's move to population estimation.
       # Sum variable(s) up to plot-level and adjust for non-response
       tPlt <- sumToPlot(t, pops, grpBy)
-      aPlt <- sumToPlot(a, pops, grpBy)
+      aPlt <- sumToPlot(a, pops, aGrpBy)
 
       # Add YEAR to groups
       grpBy <- c('YEAR', grpBy)
+      aGrpBy <- c('YEAR', aGrpBy)
 
       # Sum variable(s) up to strata then estimation unit level
-      eu.sums <- sumToEU(db, tPlt, aPlt, pops, grpBy, grpBy, method, lambda)
+      eu.sums <- sumToEU(db, tPlt, aPlt, pops, grpBy, aGrpBy, method, lambda)
       tEst <- eu.sums$x
       aEst <- eu.sums$y
 
-      # TODO: this can lead to a many-to-many join. Likely want to 
+      # TODO: this can lead to a many-to-many join. Likely want to
       #       change this
       # Using this to return a tree list for gamma and beta
       full <- data %>%
@@ -302,7 +341,7 @@ diversityStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
         dplyr::inner_join(dplyr::select(pops, c(YEAR, PLT_CN)), by = 'PLT_CN') %>%
         dplyr::filter(!is.na(YEAR) & !is.na(state) & !is.na(grp))
 
-      out <- list(tEst = tEst, aEst = aEst, grpBy = grpBy, full = full)
+      out <- list(tEst = tEst, aEst = aEst, grpBy = grpBy, aGrpBy = aGrpBy, full = full)
     }
   }
   return(out)

@@ -84,8 +84,10 @@ Timber land is a subset of forest land that is producing or is capable of produc
 Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}, values are returned for each plot (structural stage of dominant stand type; \code{PLOT_STATUS_CD = 1} when forest exists at the plot location). All variables with names ending in \code{SE}, represent the estimate of sampling error (\%) of the variable. 
 
 \itemize{
-      \item{\strong{STAGE}: Stand structural stage.}
-      \item{\strong{PERC}: \% land area in each structural stage.}
+      \item{\strong{YEAR}: reporting year associated with estimates}
+      \item{\strong{STAGE}: stand structural stage}
+      \item{\strong{COVER_PCT}: estimate of percent forest/timberland area in each structural stage}
+      \item{\strong{nPlots_AREA}: number of non-zero plots used to compute land area estimates}
       }
 }
 

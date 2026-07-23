@@ -1,5 +1,57 @@
 # rFIA (development version)
 
++ Fixed a bug in `vegStruct()` where the internal `GROWTH_HABIT_CD` domain mapping only covered the 5
+  core national vegetation growth-habit codes, silently dropping records coded with a region-specific
+  code (`DS` = dead pinyon-species shrubs, populated by certain Interior West units; `SS` = newly
+  sprouted post-fire shrub cover, populated only for Pacific Northwest Research Station Fire Effects
+  plots; also added the documented but previously unseen `AL`/`MO`/`SL`/`ST` codes) -- since
+  `GROWTH_HABIT` is part of `vegStruct()`'s internal grouping and its final output step drops any row
+  with a missing group value, every record with one of these codes was silently invisible to users,
+  not just mislabeled. Confirmed real data loss in 2 of 4 states checked (Colorado: 1172 raw `DS`
+  records; Oregon: 231 raw `SS` records).
++ Fixed a bug in `vegStruct()` where `byPlot = TRUE`'s per-plot cover estimate (`PROP_COVER`) used
+  `mean(cover, na.rm = TRUE)` across a layer/growth-habit combination's subplot-level cover values,
+  which treats a subplot where that combination wasn't recorded as a missing observation to exclude
+  from the average rather than a real 0%-cover observation to include (the same bug already fixed in
+  `invasive()`'s `byPlot` branch). This inflated `PROP_COVER` by up to 4x for a combination recorded on
+  fewer than all 4 subplots -- the normal case for patchy vegetation. Fixed by dividing by a fixed 4
+  subplots instead, matching the population-estimate branch's own formula. `byPlot = TRUE` was the only
+  affected output; the main population-level `COVER_PCT` was not affected.
++ Fixed a bug in `vegStruct()` where `nPlots_AREA` did not reflect restrictions imposed by `landType`
+  or `areaDomain` (the same class of bug already fixed in `tpa()`, `area()`, `carbon()`, `biomass()`,
+  `volume()`, `dwm()`, `invasive()`, `seedling()`, `standStruct()`, and `diversity()`; see below), and
+  an `areaDomain`/`landType` restriction matching no data could produce a spurious result instead of a
+  clean empty one. Point estimates and sampling errors were not affected by either fix.
++ Fixed a bug in `diversity()` where grouping by a `TREE`-table variable (`bySizeClass = TRUE`, or a
+  user-supplied `grpBy` referencing a `TREE` column, e.g. species group) corrupted the area
+  denominator: each forest condition's area was collapsed into whichever one grouping bin happened to
+  be encountered first, instead of correctly contributing to every bin its trees actually belong to.
+  This could push alpha-level Shannon's Equitability (`Eh_a`) above 1, which is mathematically
+  impossible under its own formula. Fixed by separating the area-only grouping columns from the full
+  grouping columns internally (matching `tpa()`'s existing `aGrpBy`/`grpBy` split), so a `TREE`-level
+  grouping variable no longer fragments the area total. `grpBy` restricted to `PLOT`/`COND` columns
+  (e.g. `OWNGRPCD`) was not affected.
++ Fixed a bug in `diversity()` where an `areaDomain`/`landType` restriction matching no data produced
+  a spurious result (`H = S = 0` with a `"no non-missing arguments to max"` warning) instead of a
+  clean empty result. `nPlots_AREA` also did not reflect restrictions imposed by `landType` or
+  `areaDomain` (the same class of bug already fixed in `tpa()`, `area()`, `carbon()`, `biomass()`,
+  `volume()`, `dwm()`, `invasive()`, `seedling()`, and `standStruct()`; see below). Point estimates and
+  sampling errors were not affected by either fix.
++ Fixed a bug in `standStruct()` where a forest condition with zero qualifying live trees (e.g. a
+  young/sparse/non-stocked stand) survives the internal tree-list join as a phantom row indistinguishable
+  from any other such condition on the same plot by `(PLT_CN, SUBP, TREE)` alone (`SUBP`/`TREE` are both
+  `NA`). Whenever a single plot had two or more zero-tree forest conditions, `distinct(PLT_CN, SUBP,
+  TREE)` collapsed them into one, silently dropping every zero-tree condition's area past the first from
+  its stand structural stage ("mosaic") classification -- even though that area still correctly counted
+  in the area total, so `COVER_PCT` summed across all four structural stages fell short of 100% (e.g.
+  North Carolina: 99.986% instead of 100%). Fixed by adding `CONDID` to the deduplication key.
++ Fixed a bug in `standStruct()` where an `areaDomain`/`landType` restriction matching no data produced
+  a spurious single-row `'mosaic'` result (with a `"no non-missing arguments to max"` warning) instead
+  of a clean empty result, because the internal structural-stage classification step could still assign
+  a fallback `'mosaic'` label to a plot with no real qualifying conditions. `nPlots_AREA` also did not
+  reflect restrictions imposed by `landType` or `areaDomain` (the same class of bug already fixed in
+  `tpa()`, `area()`, `carbon()`, `biomass()`, `volume()`, `dwm()`, `invasive()`, and `seedling()`; see
+  below). Point estimates and sampling errors were not affected by either fix.
 + Fixed a bug in `seedling()` where the tree list's `distinct(PLT_CN, SUBP, SPCD)` deduplication key
   omitted `CONDID`. Unlike `TREE`, `SEEDLING` has no per-stem ID -- `TPA_UNADJ` is already a count
   pre-aggregated to the `PLT_CN`/`SUBP`/`CONDID`/`SPCD` grain by FIA -- so whenever a subplot straddled

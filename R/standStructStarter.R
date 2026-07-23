@@ -194,7 +194,13 @@ standStructStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     t <- data %>%
       # Set the YEAR to the measurement year for plot-level estimates.
       dplyr::mutate(YEAR = MEASYEAR) %>%
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
+      # CONDID must be part of the distinct() key: a condition with no
+      # qualifying trees survives the TREE join as a SUBP = NA/TREE = NA
+      # phantom row, and a plot with *two or more* such zero-tree
+      # conditions would otherwise have all but one collapsed together
+      # (SUBP/TREE alone can't tell them apart), silently dropping that
+      # condition's area from every STAGE category (see standStruct.md).
+      dplyr::distinct(PLT_CN, SUBP, CONDID, TREE, .keep_all = TRUE) %>%
       dtplyr::lazy_dt() %>%
       dplyr::group_by(!!!grpSyms, PLT_CN, CONDID, CONDPROP_UNADJ, aDI) %>%
       dplyr::summarize(STAGE = structHelper(DIA, CCLCD)) %>%
@@ -228,12 +234,27 @@ standStructStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA
+      # row (same phantom-row pattern as tpa()/area()/biomass()/seedling()/
+      # etc). Drop them so nPlots_AREA doesn't count them as contributing
+      # plots.
+      dplyr::filter(!is.na(CONDID)) %>%
       dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!grpSyms, fa)
 
     # Tree list
     t <- data %>%
-      dplyr::distinct(PLT_CN, SUBP, TREE, .keep_all = TRUE) %>%
+      # See the byPlot branch above for why CONDID must be part of the
+      # distinct() key here.
+      dplyr::distinct(PLT_CN, SUBP, CONDID, TREE, .keep_all = TRUE) %>%
+      # A plot with no conditions passing the land type/areaDomain filter
+      # (same phantom-row pattern as the condition list `a` above) would
+      # otherwise still get a STAGE classification of 'mosaic' via
+      # structHelper()'s NaN fallback (structHelper(NA, NA) -> 'mosaic'),
+      # producing a spurious surviving row instead of a clean empty result
+      # (same class of bug fixed in invasive()'s population branch).
+      dplyr::filter(!is.na(CONDID)) %>%
       dtplyr::lazy_dt() %>%
       dplyr::group_by(!!!grpSyms, PLT_CN, PROP_BASIS, CONDID, CONDPROP_UNADJ, aDI) %>%
       dplyr::summarize(STAGE = structHelper(DIA, CCLCD)) %>%

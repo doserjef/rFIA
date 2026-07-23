@@ -80,17 +80,31 @@ vegStructStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # Adding names of id columns for layer and growth habit
   db$P2VEG_SUBP_STRUCTURE <- db$P2VEG_SUBP_STRUCTURE %>%
     dplyr::mutate(LAYER = dplyr::case_when(is.na(LAYER) ~ NA_character_,
-                                           LAYER == 1 ~ '0 to 2.0 feet', 
-                                           LAYER == 2 ~ '2.1 to 6.0 feet', 
-                                           LAYER == 3 ~ '6.1 to 16.0 feet', 
-                                           LAYER == 4 ~ 'Greater than 16 feet', 
-                                           LAYER == 5 ~ 'Areal: all layers'),
+                                           LAYER == 1 ~ '0 to 2.0 feet',
+                                           LAYER == 2 ~ '2.1 to 6.0 feet',
+                                           LAYER == 3 ~ '6.1 to 16.0 feet',
+                                           LAYER == 4 ~ 'Greater than 16 feet',
+                                           LAYER == 5 ~ 'Aerial: all layers'),
+                  # Full P2VEG_SUBP_STRUCTURE.GROWTH_HABIT_CD domain per the
+                  # FIADB User Guide (Database Description, ch. 4.3.10),
+                  # including the region-specific codes DS (Interior West,
+                  # RSCD 22: dead pinyon-species shrubs) and the PNWRS-only
+                  # AL/MO/SL/SS/ST codes (RSCD 26/27). Any code missing here
+                  # would silently drop that record's real cover data, since
+                  # GROWTH_HABIT is part of grpBy and the final output step
+                  # drops NA groups (see vegStruct.md).
                   GROWTH_HABIT = dplyr::case_when(is.na(GROWTH_HABIT_CD) ~ NA_character_,
                                                   GROWTH_HABIT_CD == 'TT' ~ 'Tally tree',
                                                   GROWTH_HABIT_CD == 'NT' ~ 'Non-tally tree',
                                                   GROWTH_HABIT_CD == 'SH' ~ 'Shrubs/vines',
-                                                  GROWTH_HABIT_CD == 'FB' ~ 'Forbs', 
-                                                  GROWTH_HABIT_CD == 'GR' ~ 'Graminoids'))
+                                                  GROWTH_HABIT_CD == 'FB' ~ 'Forbs',
+                                                  GROWTH_HABIT_CD == 'GR' ~ 'Graminoids',
+                                                  GROWTH_HABIT_CD == 'DS' ~ 'Dead pinyon species shrubs',
+                                                  GROWTH_HABIT_CD == 'AL' ~ 'All vegetation',
+                                                  GROWTH_HABIT_CD == 'MO' ~ 'Moss/bryophytes',
+                                                  GROWTH_HABIT_CD == 'SL' ~ 'Bare soil',
+                                                  GROWTH_HABIT_CD == 'SS' ~ 'Newly sprouted shrub cover',
+                                                  GROWTH_HABIT_CD == 'ST' ~ 'Seedlings'))
 
   # Intersect plots with polygons if polygons are given
   if (!is.null(polys)) {
@@ -232,7 +246,15 @@ vegStructStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       dplyr::summarize(cover = sum(COVER_PCT/100 * SUBPCOND_PROP * aDI, na.rm = TRUE)) %>%
       dplyr::ungroup() %>%
       dplyr::group_by(PLT_CN, !!!grpSyms) %>%
-      dplyr::summarize(PROP_COVER = mean(cover, na.rm = TRUE)) %>%
+      # A LAYER/GROWTH_HABIT combination not recorded on every subplot (the
+      # normal case for patchy vegetation) only has rows here for the
+      # subplots it *was* recorded on -- mean(cover, na.rm = TRUE) would
+      # treat the other subplots as missing to exclude from the average
+      # rather than real 0-cover observations to include, inflating
+      # PROP_COVER by up to 4x (same bug already fixed in invasive()'s
+      # byPlot branch; see vegStruct.md). Divide by a fixed 4 instead,
+      # matching the population-estimate branch's own formula below.
+      dplyr::summarize(PROP_COVER = sum(cover, na.rm = TRUE) / 4) %>%
       dplyr::ungroup() %>%
       as.data.frame() %>%
       dplyr::left_join(a, by = c('PLT_CN', aGrpBy)) %>%
@@ -261,12 +283,24 @@ vegStructStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       # distinct is needed to just get those distinct ones.
       # Adding PROP_BASIS so we can handle adjustment factors at strata level.
       dplyr::distinct(PLT_CN, CONDID, .keep_all = TRUE) %>%
+      # Plots whose conditions were all dropped by the land type/areaDomain
+      # filter upstream (db$COND) survive this left_join as a CONDID = NA
+      # row (same phantom-row pattern as tpa()/area()/biomass()/seedling()/
+      # standStruct()/diversity()/etc). Drop them so nPlots_AREA doesn't
+      # count them as contributing plots.
+      dplyr::filter(!is.na(CONDID)) %>%
       dplyr::mutate(fa = CONDPROP_UNADJ * aDI) %>%
       dplyr::select(PLT_CN, AREA_BASIS = PROP_BASIS, CONDID, !!!aGrpSyms, fa)
 
     # Tree list
     t <- data %>%
       dplyr::distinct(PLT_CN, CONDID, SUBP, LAYER, GROWTH_HABIT, .keep_all = TRUE) %>%
+      # A plot with no conditions passing the land type/areaDomain filter
+      # would otherwise still survive as a CONDID = NA row with a real-
+      # looking cover = 0 (from sum(NA, na.rm = TRUE) / 4), rather than a
+      # genuinely empty result (same class of bug fixed in
+      # standStruct()/diversity(); see vegStruct.md).
+      dplyr::filter(!is.na(CONDID)) %>%
       dtplyr::lazy_dt() %>%
       dplyr::group_by(!!!grpSyms, PLT_CN, PROP_BASIS, CONDID, CONDPROP_UNADJ) %>%
       dplyr::summarize(cover = sum(COVER_PCT/100 * SUBPCOND_PROP * aDI * CONDPROP_UNADJ, 

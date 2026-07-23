@@ -43,28 +43,36 @@ diversity <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
   tEst <- dplyr::bind_rows(out[names(out) == 'tEst'])
   full <- dplyr::bind_rows(out[names(out) == 'full'])
   grpBy <- out[names(out) == 'grpBy'][[1]]
+  aGrpBy <- out[names(out) == 'aGrpBy'][[1]]
   grpSyms <- dplyr::syms(grpBy)
-  
+  aGrpSyms <- dplyr::syms(aGrpBy)
+
   # Summarize population estimates across estimation units ----------------
   if (!byPlot & !condList) {
     # Combine most recent population estimates across states with potentially
-    # different reporting schedules (e.g., if 2016 is most recent in MI and 2017 
-    # is most recent in WI, combine them and label as 2017. 
+    # different reporting schedules (e.g., if 2016 is most recent in MI and 2017
+    # is most recent in WI, combine them and label as 2017.
     if (mr) {
       tEst <- combineMR(tEst)
       aEst <- combineMR(aEst)
     }
 
     # Totals and ratios ---------------
-    aEst <- aEst %>% 
-      dplyr::group_by(!!!grpSyms) %>% 
-      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>% 
-      dplyr::select(!!!grpSyms, fa_mean, fa_var, nPlots.y)
+    # aEst is grouped/joined by aGrpSyms/aGrpBy (not grpSyms/grpBy): grpBy
+    # may include TREE-table-only variables (bySizeClass's 'sizeClass', a
+    # user-supplied TREE column) that aren't part of aEst's own grouping
+    # (see diversityStarter.R/diversity.md) -- grouping aEst by the full
+    # grpSyms here would either error (column not present) or silently
+    # fragment the area total across those bins.
+    aEst <- aEst %>%
+      dplyr::group_by(!!!aGrpSyms) %>%
+      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>%
+      dplyr::select(!!!aGrpSyms, fa_mean, fa_var, nPlots.y)
 
     tEst <- tEst %>%
       dplyr::group_by(!!!grpSyms) %>%
       dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>%
-      dplyr::left_join(aEst, by = grpBy) %>%
+      dplyr::left_join(aEst, by = aGrpBy) %>%
       dplyr::mutate(H_a = H_mean / fa_mean,
                     Eh_a = Eh_mean / fa_mean,
                     S_a = S_mean / fa_mean,
