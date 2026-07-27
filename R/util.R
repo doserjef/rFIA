@@ -351,7 +351,7 @@ typeDomain_grow <- function(db, treeType, landType, type, stateVar = NULL) {
                                                COMPONENT = SUBP_COMPONENT_AL_FOREST)
 
       } else if (tolower(treeType) == 'gs'){
-        db$TREE$typeD <- 1 
+        db$TREE$typeD <- 1
         db$TREE_GRM_COMPONENT <- dplyr::rename(db$TREE_GRM_COMPONENT,
                                                TPAMORT_UNADJ = SUBP_TPAMORT_UNADJ_GS_FOREST,
                                                TPAREMV_UNADJ = SUBP_TPAREMV_UNADJ_GS_FOREST,
@@ -359,6 +359,15 @@ typeDomain_grow <- function(db, treeType, landType, type, stateVar = NULL) {
                                                SUBPTYP_GRM = SUBP_SUBPTYP_GRM_GS_FOREST,
                                                COMPONENT = SUBP_COMPONENT_GS_FOREST)
       }
+      # Sawtimber-specific growth-accounting component, used only for SAWVOL_GROW/
+      # SAWVOL_GROW_AC. EVALIDator's sawlog-volume growth attributes are defined for
+      # sawtimber trees specifically (a size-based subset of growing-stock), not the
+      # treeType selected above, matching growMort()'s existing SL_FOREST/SL_TIMBER
+      # handling for its SAWVOL/SAWVOL_BF state variables.
+      db$TREE_GRM_COMPONENT <- dplyr::rename(db$TREE_GRM_COMPONENT,
+                                             TPAGROW_UNADJ_SAW = SUBP_TPAGROW_UNADJ_SL_FOREST,
+                                             SUBPTYP_GRM_SAW = SUBP_SUBPTYP_GRM_SL_FOREST,
+                                             COMPONENT_SAW = SUBP_COMPONENT_SL_FOREST)
     } else if (tolower(landType) == 'timber'){
       db$COND$landD <- ifelse(db$COND$COND_STATUS_CD == 1 & db$COND$SITECLCD %in% c(1, 2, 3, 4, 5, 6) & db$COND$RESERVCD == 0, 1, 0)
       # Tree Type domain indicator
@@ -382,6 +391,12 @@ typeDomain_grow <- function(db, treeType, landType, type, stateVar = NULL) {
                                                SUBPTYP_GRM = SUBP_SUBPTYP_GRM_GS_TIMBER,
                                                COMPONENT = SUBP_COMPONENT_GS_TIMBER)
       }
+      # Sawtimber-specific growth-accounting component -- see the matching comment
+      # in the 'forest' branch above.
+      db$TREE_GRM_COMPONENT <- dplyr::rename(db$TREE_GRM_COMPONENT,
+                                             TPAGROW_UNADJ_SAW = SUBP_TPAGROW_UNADJ_SL_TIMBER,
+                                             SUBPTYP_GRM_SAW = SUBP_SUBPTYP_GRM_SL_TIMBER,
+                                             COMPONENT_SAW = SUBP_COMPONENT_SL_TIMBER)
     }
 
   } else if (type == 'gm') {

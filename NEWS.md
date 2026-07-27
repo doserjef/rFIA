@@ -1,5 +1,44 @@
 # rFIA (development version)
 
++ Fixed a bug in `vitalRates()` where `SAWVOL_GROW`/`SAWVOL_GROW_AC` (sawlog board-foot volume
+  growth) was computed from the same growing-stock growth-accounting component used for the other
+  four growth metrics (`DIA_GROW`, `BA_GROW`, `NETVOL_GROW`, `BIO_GROW`), rather than the
+  sawtimber-specific component EVALIDator's sawlog-volume growth attributes are actually defined
+  against -- the same distinction `growMort()` already makes for its own `SAWVOL`/`SAWVOL_BF` state
+  variables, independent of `treeType`. This under- or over-stated `SAWVOL_GROW_AC` by roughly
+  0.3-3% depending on state. Point estimates and sampling errors for the other four growth metrics
+  were not affected.
++ Fixed a bug in `vitalRates()` where an `areaDomain` restriction (e.g. `PHYSCLCD %in% 21:29`) was
+  applied to tree-level growth using the *previous* measurement's condition instead of the current
+  one, while the area (denominator) side already correctly used the current condition -- creating a
+  small, state-dependent mismatch (worse in states with more physiographic-class turnover between
+  remeasurements) whenever a plot's `areaDomain`-relevant classification changed between visits.
+  Point estimates for `areaDomain`-restricted calls were affected; unrestricted calls were not.
++ Fixed a bug in `vitalRates()` where `landType = 'forest'` silently dropped all area-change
+  information for any condition whose proportion was measured on the macroplot (`COND.PROP_BASIS ==
+  'MACR'`) rather than the standard subplot -- the internal area-change join hardcoded
+  `SUBP_COND_CHNG_MTRX.SUBPTYP == 1`, when the FIA Population Estimation User Guide's own
+  growth-accounting methodology requires `SUBPTYP == 3` for macroplot-basis conditions. This was
+  invisible in states where forest conditions are exclusively subplot-basis (confirmed for RI, NC,
+  CO), but caused a small, consistent undercount of `BIO_GROW_AC` (~-0.1%) and `nPlots_AREA` (~-0.6%)
+  in Pacific/Western states that commonly use macroplot sampling (confirmed for OR, CA, WA). A
+  residual, smaller discrepancy specific to `landType = 'timber'` in those same three states remains
+  under investigation (see `core_references/validation/vitalRates.md`).
++ Fixed a bug in `vitalRates()` where `nPlots_TREE` did not reflect restrictions imposed by
+  `treeDomain` at all -- even a `treeDomain` matching zero trees left `nPlots_TREE` unchanged from the
+  unrestricted value. Every row of a `bySpecies = TRUE` call reported the same, unrestricted
+  `nPlots_TREE` regardless of how common that species actually was, defeating its use as the
+  degrees of freedom for a t-based confidence interval. Root cause: the tree list's plot-count filter
+  depended only on whether a tree had a valid growth-accounting record for the current
+  `landType`/`treeType` (via FIA's precomputed `TREE_GRM_COMPONENT` columns), not on whether the
+  user's `treeDomain`/`areaDomain` indicator (`tDI`) actually matched -- `tDI` only zeroed the growth
+  values for non-matching trees, without excluding them from the plot count. Point estimates and
+  sampling errors were not affected.
++ Fixed a bug in `vitalRates()` where `nPlots_AREA` did not reflect restrictions imposed by
+  `landType` or `areaDomain` at all (the same class of bug already fixed in `tpa()`, `area()`,
+  `carbon()`, `biomass()`, `volume()`, `dwm()`, `invasive()`, `seedling()`, `standStruct()`,
+  `diversity()`, and `vegStruct()`; see above), including the same spurious/empty-result-with-warning
+  edge case when a restriction matched no data. Point estimates and sampling errors were not affected.
 + Fixed a bug in `vegStruct()` where the internal `GROWTH_HABIT_CD` domain mapping only covered the 5
   core national vegetation growth-habit codes, silently dropping records coded with a region-specific
   code (`DS` = dead pinyon-species shrubs, populated by certain Interior West units; `SS` = newly

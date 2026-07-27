@@ -173,9 +173,9 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # Drop visits not used in our eval of interest
     dplyr::filter(PLT_CN %in% pops$PLT_CN)
   # COND ------------------------------
-  db$COND <- db$COND %>% 
-    dplyr::select(PLT_CN, CONDPROP_UNADJ, PROP_BASIS, COND_STATUS_CD, CONDID, 
-                  dplyr::all_of(grpC), aD, landD) %>% 
+  db$COND <- db$COND %>%
+    dplyr::select(PLT_CN, CONDPROP_UNADJ, PROP_BASIS, COND_STATUS_CD, CONDID,
+                  COND_NONSAMPLE_REASN_CD, dplyr::all_of(grpC), aD, landD) %>%
     # Drop visits not used in our eval of interest
     dplyr::filter(PLT_CN %in% c(db$PLOT$PLT_CN, db$PLOT$PREV_PLT_CN))
 
@@ -192,7 +192,8 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # correct value to TPAGROW_UNADJ, TPAREMV_UNADJ, TPAMORT_UNADJ, COMPONENT
   db$TREE_GRM_COMPONENT <- db$TREE_GRM_COMPONENT %>%
     dplyr::select(c(TRE_CN, SUBPTYP_GRM, TPAGROW_UNADJ,
-                    TPAREMV_UNADJ, TPAMORT_UNADJ, COMPONENT)) %>%
+                    TPAREMV_UNADJ, TPAMORT_UNADJ, COMPONENT,
+                    SUBPTYP_GRM_SAW, TPAGROW_UNADJ_SAW, COMPONENT_SAW)) %>%
     dplyr::filter(TRE_CN %in% db$TREE$TRE_CN)
   # TREE_GRM_MIDPT --------------------
   db$TREE_GRM_MIDPT <- db$TREE_GRM_MIDPT %>%
@@ -234,9 +235,11 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                                               STATUSCD)), 
                      by = c('PLT_CN', 'CONDID')) %>%
     # Join with TREE_GRM_COMPONENT
-    dplyr::left_join(dplyr::select(db$TREE_GRM_COMPONENT, c(TRE_CN, SUBPTYP_GRM, 
-                                                            TPAGROW_UNADJ, TPAREMV_UNADJ, 
-                                                            TPAMORT_UNADJ, COMPONENT)), 
+    dplyr::left_join(dplyr::select(db$TREE_GRM_COMPONENT, c(TRE_CN, SUBPTYP_GRM,
+                                                            TPAGROW_UNADJ, TPAREMV_UNADJ,
+                                                            TPAMORT_UNADJ, COMPONENT,
+                                                            SUBPTYP_GRM_SAW, TPAGROW_UNADJ_SAW,
+                                                            COMPONENT_SAW)),
                      by = c('TRE_CN')) %>%
     # Join with TREE_GRM_MIDPT
     dplyr::left_join(dplyr::select(db$TREE_GRM_MIDPT, c(TRE_CN, DIA, VOLCFNET, 
@@ -278,7 +281,7 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                   aD.prev = dplyr::case_when(is.na(aD.prev) ~ aD, TRUE ~ aD.prev), 
                   sp.prev = dplyr::case_when(is.na(sp.prev) ~ sp, TRUE ~ sp.prev)) %>%
     # Comprehensive domain indicators
-    dplyr::mutate(tDI = landD.prev * aD.prev * tD.prev * typeD.prev * sp.prev * tChng, 
+    dplyr::mutate(tDI = landD.prev * aD * tD.prev * typeD.prev * sp.prev * tChng,
                   aDI = landD.prev * aD * sp * aChng) %>%
     as.data.frame() %>%
     distinct()
@@ -301,10 +304,14 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                                           VOLCFNET.beg, COMPONENT, REMPER, 2) * tDI,
                   VOLCFNET1 = vrAttHelper(VOLCFNET, VOLCFNET.prev, VOLCFNET.mid, 
                                           VOLCFNET.beg, COMPONENT, REMPER, 1) * tDI,
-                  VOLBFNET2 = vrAttHelper(VOLBFNET, VOLBFNET.prev, VOLBFNET.mid, 
-                                          VOLBFNET.beg, COMPONENT, REMPER, 2) * tDI,
-                  VOLBFNET1 = vrAttHelper(VOLBFNET, VOLBFNET.prev, VOLBFNET.mid, 
-                                          VOLBFNET.beg, COMPONENT, REMPER, 1) * tDI,
+                  # Sawlog board-foot volume growth is defined by EVALIDator for
+                  # sawtimber trees specifically, so it uses the sawtimber-specific
+                  # growth-accounting component (COMPONENT_SAW) rather than the
+                  # treeType-selected one used by every other attribute here.
+                  VOLBFNET2 = vrAttHelper(VOLBFNET, VOLBFNET.prev, VOLBFNET.mid,
+                                          VOLBFNET.beg, COMPONENT_SAW, REMPER, 2) * tDI,
+                  VOLBFNET1 = vrAttHelper(VOLBFNET, VOLBFNET.prev, VOLBFNET.mid,
+                                          VOLBFNET.beg, COMPONENT_SAW, REMPER, 1) * tDI,
                   DRYBIO_AG2 = vrAttHelper(DRYBIO_AG, DRYBIO_AG.prev, DRYBIO_AG.mid, 
                                            DRYBIO_AG.beg, COMPONENT, REMPER, 2) * tDI,
                   DRYBIO_AG1 = vrAttHelper(DRYBIO_AG, DRYBIO_AG.prev, DRYBIO_AG.mid, 
@@ -316,9 +323,9 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                   
   # Only grab what's needed
   data <- data %>%
-    dplyr::select(PLT_CN, TRE_CN, SUBP, CONDID, TREE, tDI, grpP, grpC, grpT, 
-                  TPAGROW_UNADJ, PROP_BASIS, SUBPTYP_GRM, PLOT_STATUS_CD, 
-                  DIA2, DIA1, BA2, BA1, DRYBIO_AG2, DRYBIO_AG1, VOLCFNET2, 
+    dplyr::select(PLT_CN, TRE_CN, SUBP, CONDID, TREE, tDI, grpP, grpC, grpT,
+                  TPAGROW_UNADJ, TPAGROW_UNADJ_SAW, PROP_BASIS, SUBPTYP_GRM, SUBPTYP_GRM_SAW,
+                  PLOT_STATUS_CD, DIA2, DIA1, BA2, BA1, DRYBIO_AG2, DRYBIO_AG1, VOLCFNET2,
                   VOLCFNET1, VOLBFNET2, VOLBFNET1, MEASYEAR) %>%
     # Rearrange previous values as observations
     tidyr::pivot_longer(cols = DIA2:VOLBFNET1, 
@@ -336,17 +343,21 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                      by = c('PLT_CN', 'PREV_PLT_CN')) %>%
     # Join with COND
     dplyr::left_join(dplyr::select(db$COND, c(PLT_CN, CONDPROP_UNADJ, PROP_BASIS,
-                                              COND_STATUS_CD, CONDID, dplyr::all_of(grpC),
-                                              aD, landD)),
+                                              COND_STATUS_CD, CONDID, COND_NONSAMPLE_REASN_CD,
+                                              dplyr::all_of(grpC), aD, landD)),
                      by = c('PLT_CN', 'CONDID')) %>%
     # Join COND with PREV_PLT_CN and PREVCOND
     dplyr::left_join(dplyr::select(db$COND, c(PLT_CN, PROP_BASIS, COND_STATUS_CD,
-                                              CONDID, dplyr::all_of(grpC), aD, landD)),
+                                              CONDID, COND_NONSAMPLE_REASN_CD,
+                                              dplyr::all_of(grpC), aD, landD)),
                      by = c('PREV_PLT_CN' = 'PLT_CN', 'PREVCOND' = 'CONDID'), suffix = c('', '.prev')) %>%
-    dplyr::mutate(aChng = dplyr::case_when(COND_STATUS_CD == 1 & 
-                                           COND_STATUS_CD.prev == 1 & 
-                                           !is.null(CONDPROP_UNADJ) & 
-                                           SUBPTYP == 1 ~ 1 ,
+    dplyr::mutate(aChng = dplyr::case_when(COND_STATUS_CD == 1 &
+                                           COND_STATUS_CD.prev == 1 &
+                                           !is.null(CONDPROP_UNADJ) &
+                                           dplyr::coalesce(COND_NONSAMPLE_REASN_CD, 0) == 0 &
+                                           dplyr::coalesce(COND_NONSAMPLE_REASN_CD.prev, 0) == 0 &
+                                           ((SUBPTYP == 1 & PROP_BASIS == 'SUBP') |
+                                            (SUBPTYP == 3 & PROP_BASIS == 'MACR')) ~ 1 ,
                                            TRUE ~ 0),
                   # Multiply by .25 since doing woring at plot level
                   SUBPTYP_PROP_CHNG = SUBPTYP_PROP_CHNG * .25) %>%
@@ -383,7 +394,10 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                        d = sum(DIA * TPAGROW_UNADJ * tDI, na.rm = TRUE), 
                        ba = sum(BA * TPAGROW_UNADJ * tDI, na.rm = TRUE), 
                        vol = sum(VOLCFNET * TPAGROW_UNADJ * tDI, na.rm = TRUE),
-                       svol = sum(VOLBFNET * TPAGROW_UNADJ * tDI, na.rm = TRUE) / 1000,
+                       # Sawlog board-foot growth uses the sawtimber-specific
+                       # weighting (TPAGROW_UNADJ_SAW) -- VOLBFNET itself is
+                       # already sawtimber-corrected via COMPONENT_SAW above.
+                       svol = sum(VOLBFNET * TPAGROW_UNADJ_SAW * tDI, na.rm = TRUE) / 1000,
                        bio = sum(DRYBIO_AG * TPAGROW_UNADJ * tDI, na.rm = TRUE) / 2000) %>%
       dplyr::mutate(DIA_GROW = d / t,
                     BA_GROW = ba / t,
@@ -435,7 +449,6 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                     dPlot = DIA * TPAGROW_UNADJ * tDI,
                     bPlot = BA * TPAGROW_UNADJ * tDI,
                     gPlot = VOLCFNET * TPAGROW_UNADJ * tDI,
-                    sPlot = VOLBFNET * TPAGROW_UNADJ * tDI / 1000,
                     bioPlot = DRYBIO_AG * TPAGROW_UNADJ * tDI / 2000) %>%
       # Need a code that tells us where the tree was measured
       # macroplot, microplot, subplot
@@ -444,7 +457,29 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                                            SUBPTYP_GRM == 2 ~ 'MICR',
                                            SUBPTYP_GRM == 3 ~ 'MACR')) %>%
       dplyr::filter(!is.na(TREE_BASIS)) %>%
-      dplyr::select(PLT_CN, TREE_BASIS, SUBP, TREE, ONEORTWO, !!!grpSyms, tPlot:bioPlot) %>%
+      dplyr::select(PLT_CN, TREE_BASIS, SUBP, TREE, ONEORTWO, !!!grpSyms, tPlot:bioPlot, tDI) %>%
+      as.data.frame()
+
+    # Sawlog board-foot growth (SAWVOL_GROW/SAWVOL_GROW_AC) uses a separate,
+    # sawtimber-specific growth-accounting component (COMPONENT_SAW/
+    # TPAGROW_UNADJ_SAW/SUBPTYP_GRM_SAW -- see typeDomain_grow() in util.R),
+    # since EVALIDator's sawlog-volume growth attributes are defined for
+    # sawtimber trees specifically, not the treeType selected for the other
+    # four growth metrics above. Sawtimber-sized trees can be tallied on a
+    # different subplot/macroplot basis than the broader growing-stock set,
+    # so this needs its own TREE_BASIS for adjustment purposes too -- kept as
+    # a separate object (rather than an extra column on `t`) so it can go
+    # through its own sumToPlot() call below.
+    t_saw <- data %>%
+      dplyr::distinct(PLT_CN, SUBP, TREE, ONEORTWO, .keep_all = TRUE) %>%
+      dtplyr::lazy_dt() %>%
+      dplyr::mutate(sPlot = VOLBFNET * TPAGROW_UNADJ_SAW * tDI / 1000) %>%
+      dplyr::mutate(TREE_BASIS = case_when(SUBPTYP_GRM_SAW == 0 ~ NA_character_,
+                                           SUBPTYP_GRM_SAW == 1 ~ 'SUBP',
+                                           SUBPTYP_GRM_SAW == 2 ~ 'MICR',
+                                           SUBPTYP_GRM_SAW == 3 ~ 'MACR')) %>%
+      dplyr::filter(!is.na(TREE_BASIS)) %>%
+      dplyr::select(PLT_CN, TREE_BASIS, SUBP, TREE, ONEORTWO, !!!grpSyms, sPlot, tDI) %>%
       as.data.frame()
 
       # Return a tree list ready to be handed to customPSE()
@@ -457,6 +492,8 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
         dplyr::ungroup() %>%
         as.data.frame() %>%
         dplyr::left_join(t, by = c('PLT_CN', aGrpBy)) %>%
+        dplyr::left_join(dplyr::select(t_saw, PLT_CN, SUBP, TREE, ONEORTWO, sPlot),
+                         by = c('PLT_CN', 'SUBP', 'TREE', 'ONEORTWO')) %>%
         dplyr::mutate(EVAL_TYP = 'GROW') %>%
         dplyr::select(PLT_CN, EVAL_TYP, TREE_BASIS, AREA_BASIS,
                       !!!grpSyms, CONDID, SUBP, TREE, ONEORTWO,
@@ -472,8 +509,35 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     } else {
       # If a tree list is not desired, let's move to population estimation.
       # Sum variable(s) up to plot-level and adjust for non-response
-      tPlt <- sumToPlot(t, pops, grpBy)
-      aPlt <- sumToPlot(a, pops, aGrpBy)
+      # Drop trees with no (or undefined) treeDomain/areaDomain/landType
+      # match before counting plots -- tDI == 0 trees already contribute
+      # exactly 0 to tPlot:bioPlot (they're zeroed by the same multiplier),
+      # so excluding them here changes no point estimate or variance, but
+      # otherwise a treeDomain/areaDomain matching zero trees still leaves
+      # every plot counted towards nPlots_TREE (TREE_BASIS reflects only
+      # whether SUBPTYP_GRM/landType/treeType gave the tree a valid
+      # growth-accounting record, not whether the user's tDI matched it).
+      tPlt <- sumToPlot(dplyr::select(dplyr::filter(t, !is.na(tDI) & tDI > 0), -tDI),
+                        pops, grpBy)
+      # Sawlog board-foot growth uses its own sawtimber-specific TREE_BASIS/
+      # adjustment (see `t_saw` construction above), so it's summed to plot
+      # level separately and merged back in here -- sumToPlot() collapses
+      # TREE_BASIS after applying the adjustment factor, so the two objects
+      # are compatible to join on (ESTN_UNIT_CN, STRATUM_CN, PLT_CN, grpBy).
+      # Plots with no qualifying sawtimber trees get a real 0, not a dropped
+      # row or NA.
+      tPlt_saw <- sumToPlot(dplyr::select(dplyr::filter(t_saw, !is.na(tDI) & tDI > 0), -tDI),
+                            pops, grpBy)
+      tPlt <- dplyr::left_join(tPlt, tPlt_saw, by = c('ESTN_UNIT_CN', 'STRATUM_CN', 'PLT_CN', grpBy)) %>%
+        dplyr::mutate(sPlot = dplyr::coalesce(sPlot, 0))
+      # Drop conditions with no (or undefined) area contribution before
+      # counting plots -- otherwise plots excluded by landType/areaDomain
+      # (fa = 0) or lacking a valid growth-accounting match (fa = NA) are
+      # still counted towards nPlots_AREA even though they contribute
+      # nothing to the area estimate. Safe to filter here (rather than on
+      # the shared `a` object, which also feeds the treeList output above):
+      # dropped rows would only ever have summed to 0 downstream anyway.
+      aPlt <- sumToPlot(dplyr::filter(a, !is.na(fa) & fa > 0), pops, aGrpBy)
 
       # Add YEAR to groups
       grpBy <- c('YEAR', grpBy)
@@ -485,7 +549,7 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       aEst <- eu.sums$y
 
       # Have to repeat this with tree totals as the denominator
-      eu.sums <- sumToEU(db, dplyr::select(tPlt, -c(tPlot)), dplyr::select(tPlt, -c(dPlot:bioPlot)), 
+      eu.sums <- sumToEU(db, dplyr::select(tPlt, -c(tPlot)), dplyr::select(tPlt, -c(dPlot:bioPlot, sPlot)),
                          pops, grpBy, grpBy, method, lambda)
       ttEst <- eu.sums$x %>%
         dplyr::select(ESTN_UNIT_CN, all_of(grpBy), dPlot_cv_t = dPlot_cv,
