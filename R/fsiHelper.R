@@ -19,9 +19,11 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot) {
     dplyr::left_join(select(db$COND, PLT_CN, DSTRBCD1, TRTCD1), by = 'PLT_CN') %>%
     dplyr::mutate(DSTRBCD1 = tidyr::replace_na(DSTRBCD1, 0),
                   TRTCD1 = tidyr::replace_na(TRTCD1, 0)) %>%
-    dplyr::filter(DSTRBCD1 > 0) %>%
-    # Natural regen is ok
-    dplyr::filter(TRTCD1 > 0 & !c(TRTCD1 %in% 40)) %>%
+    # Exclude plots showing evidence of disturbance and/or (non-natural-regen)
+    # silvicultural treatment -- either alone disqualifies a plot from the
+    # max size-density curve calibration set (Stanke et al. 2021). Natural
+    # regen (TRTCD1 == 40) is not treated as a disqualifying treatment.
+    dplyr::filter(DSTRBCD1 > 0 | c(TRTCD1 > 0 & !c(TRTCD1 %in% 40))) %>%
     # These plots were disturbed or treated
     dplyr::distinct(PLT_CN, pltID)
   
@@ -359,7 +361,6 @@ fsiHelper2 <- function(x, popState, t, a, grpBy, scaleBy, method, useSeries) {
                   PREV_TPA = PREV_TPA * tAdj,
                   PREV_BA = PREV_BA * tAdj,
                   PREV_RD = PREV_RD * tAdj,
-                  REMPER = REMPER * tAdj,
                   FSI = FSI * tAdj) %>%
     # Extra step for variance issues - summing micro, subp, and macr components
     dplyr::group_by(ESTN_UNIT_CN, ESTN_METHOD, STRATUM_CN, PLT_CN, REMPER, !!!grpSyms) %>%

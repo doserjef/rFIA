@@ -2,7 +2,7 @@
 model {
 
   ## Informative priors on the regression coefficients
-  alpha ~ dnorm(6, pow(1, -2))
+  alpha ~ dnorm(7, pow(1, -2))
   beta ~ dnorm(-.8025, pow(.1, -2))
 
   ## Prior on the residual SD

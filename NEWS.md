@@ -1,5 +1,36 @@
 # rFIA (development version)
 
++ Fixed a bug in `fsi()` where the plot-level remeasurement interval (`REMPER`) was incorrectly
+  multiplied by the subplot/microplot/macroplot nonresponse adjustment factor before being used as a
+  grouping key to recombine a plot's per-plot-basis rows back into a single row. Because that
+  adjustment factor differs by plot basis, a single plot's rows ended up with different `REMPER`
+  values and so failed to recombine, leaving the same physical plot represented by multiple rows.
+  Tree-density sums still totaled correctly across those extra rows, but the subsequent area join (not
+  keyed on `REMPER`) re-attached a full copy of that plot's forest-area weight to each spurious row,
+  inflating the area denominator relative to the tree-count numerator. This systematically
+  under-estimated every per-acre output (`FSI`, `PERC_FSI`, `PREV_RD`, `CURR_RD`) by roughly 50-65% in
+  spot checks (RI, NC, CO, OR) and inflated `nPlots` past the true number of eligible plots. Values
+  from `byPlot = TRUE` were not affected, since they do not go through this code path.
++ Fixed the informative prior on the intercept of `fsi()`'s maximum size-density curve (Bayesian
+  quantile regression, `inst/extdata/qrLM.jag`/`qrLMM.jag`) to match Stanke et al. (2021): mean 7, not
+  6. The slope prior was already correct.
++ Fixed `fsi()`'s exclusion of disturbed/treated plots from the maximum size-density curve calibration
+  set to match Stanke et al. (2021): a plot showing evidence of disturbance *or* (non-natural-regen)
+  silvicultural treatment is now excluded, rather than requiring both simultaneously. Previously, a
+  plot with significant disturbance but no recorded follow-up treatment (e.g. an untreated wildfire)
+  was incorrectly retained in the calibration set.
++ Removed the `totals` argument from `fsi()`. It had no effect on the returned output (both branches
+  of the `totals`-dependent code returned identical columns) despite being documented as adding raw
+  population totals; every other estimator's `totals` argument works as documented; `fsi()`'s did not
+  and has been removed rather than implemented, since `FSI`/`PERC_FSI`/`PREV_RD`/`CURR_RD` are already
+  ratio quantities with no natural population-total analog.
++ Fixed a bug where `fsi(areaDomain = ...)` crashed with `"replacement has 1 row, data has 0"` when the
+  `areaDomain` (or `landType`) restricted the population to zero plots, instead of returning a clean
+  empty result. `byPlot = FALSE` now returns a 0-row result in this case (or when a `treeDomain`
+  matches zero trees, which previously returned a spurious 1-row result of `NaN`s instead of an empty
+  result); `byPlot = TRUE` keeps all plot rows with `FSI = 0`/`NA`, consistent with how `tpa()` and
+  `vitalRates()` already handle an empty domain.
++ Fixed a `dplyr::across()` deprecation warning raised by `fsi(method = 'ANNUAL')`.
 + Fixed a bug in `vitalRates()` where `SAWVOL_GROW`/`SAWVOL_GROW_AC` (sawlog board-foot volume
   growth) was computed from the same growing-stock growth-accounting component used for the other
   four growth metrics (`DIA_GROW`, `BA_GROW`, `NETVOL_GROW`, `BIO_GROW`), rather than the

@@ -1,8 +1,8 @@
 fsi <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE, 
                 bySpecies = FALSE, bySizeClass = FALSE, landType = 'forest', 
                 treeType = 'live', method = 'TI', lambda = .5, 
-                treeDomain = NULL, areaDomain = NULL, totals = TRUE, 
-                variance = TRUE, byPlot = FALSE, useSeries = FALSE, 
+                treeDomain = NULL, areaDomain = NULL,
+                variance = TRUE, byPlot = FALSE, useSeries = FALSE,
                 mostRecent = FALSE, scaleBy = NULL, betas = NULL, 
                 returnBetas = FALSE, nCores = 1) {
   
@@ -48,7 +48,7 @@ If not already installed, you can install JAGS from SourceForge:
   out <- lapply(X = iter, FUN = fsiStarter, db, grpBy_quo = grpBy_quo, 
                 scaleBy_quo, polys, returnSpatial, bySpecies, bySizeClass,
                 landType, treeType, method, lambda, treeDomain, areaDomain,
-                totals, byPlot, useSeries, mostRecent, nCores, remote, mr)
+                byPlot, useSeries, mostRecent, nCores, remote, mr)
   
   # Extract results from list.  
   out <- unlist(out, recursive = FALSE)
@@ -95,12 +95,26 @@ If not already installed, you can install JAGS from SourceForge:
       dplyr::left_join(nGrps, by = 'grps')
     
   } else {
-    grpRates$grps <- 1
-    t$grps = 1
+    # Use rep() rather than a bare scalar so this stays safe when grpRates/t
+    # have zero rows (e.g. landType/areaDomain matches no plots) -- a bare
+    # `<- 1` errors with "replacement has 1 row, data has 0" in that case.
+    grpRates$grps <- rep(1, nrow(grpRates))
+    t$grps <- rep(1, nrow(t))
   }
-  
+
   # Estimate parameters ---------------------------------------------------
-  if (is.null(betas)) {
+  if (nrow(grpRates) == 0) {
+    # No plots are available to fit a maximum size-density curve (e.g. an
+    # areaDomain/landType restriction, or disturbance/skewness exclusions,
+    # leave nothing to calibrate against). There's no meaningful curve to
+    # estimate -- and R2jags::jags() cannot run on zero observations -- so
+    # skip fitting and assign NA parameters instead. This propagates to NA
+    # relative density for every tree below, which downstream collapses to
+    # a clean empty population estimate (nPlots = 0) while byPlot output
+    # keeps its rows with 0 values, consistent with every other estimator's
+    # handling of an empty domain.
+    betas <- data.frame(grps = unique(t$grps), alpha = NA_real_, rate = NA_real_, n = 0)
+  } else if (is.null(betas)) {
     # Prep data for model. Note that this is the plot-level data that gets used 
     # to fit the quantile regression model. 
     prep <- grpRates %>% 
@@ -453,7 +467,7 @@ If not already installed, you can install JAGS from SourceForge:
         dplyr::mutate(dplyr::across(ctEst:rempEst, ~(.*wgt))) %>%
         dplyr::mutate(dplyr::across(ctVar:cvEst_remp, ~(.*(wgt^2)))) %>%
         dplyr::group_by(ESTN_UNIT_CN, across(all_of(grpBy))) %>%
-        dplyr::summarize(across(ctEst:plotIn_t, sum, na.rm = TRUE))
+        dplyr::summarize(across(ctEst:plotIn_t, \(x) sum(x, na.rm = TRUE)))
       
       # If using an ANNUAL estimator --------------------------------------------
     } else if (stringr::str_to_upper(method) == 'ANNUAL') {
@@ -524,25 +538,19 @@ If not already installed, you can install JAGS from SourceForge:
     })
     
     
-    if (totals) {
-      tOut <- tOut %>%
-        dplyr::select(grpBy, FSI, PERC_FSI, FSI_STATUS,
-                      FSI_INT, PERC_FSI_INT,
-                      PREV_RD, CURR_RD, TPA_RATE, BA_RATE,
-                      FSI_VAR, PERC_FSI_VAR, PREV_RD_VAR, CURR_RD_VAR,
-                      TPA_RATE_VAR, BA_RATE_VAR,
-                      nPlots)
-      
-    } else {
-      tOut <- tOut %>%
-        dplyr::select(grpBy, FSI, PERC_FSI, FSI_STATUS,
-                      FSI_INT, PERC_FSI_INT,
-                      PREV_RD, CURR_RD, TPA_RATE, BA_RATE,
-                      FSI_VAR, PERC_FSI_VAR, PREV_RD_VAR, CURR_RD_VAR,
-                      TPA_RATE_VAR, BA_RATE_VAR,
-                      nPlots)
-    }
-    
+    tOut <- tOut %>%
+      dplyr::select(grpBy, FSI, PERC_FSI, FSI_STATUS,
+                    FSI_INT, PERC_FSI_INT,
+                    PREV_RD, CURR_RD, TPA_RATE, BA_RATE,
+                    FSI_VAR, PERC_FSI_VAR, PREV_RD_VAR, CURR_RD_VAR,
+                    TPA_RATE_VAR, BA_RATE_VAR,
+                    nPlots) %>%
+      # A row with no contributing plots (e.g. a treeDomain/areaDomain
+      # matching nothing) has nothing to report -- drop it for a clean
+      # empty result, consistent with every other estimator's handling of
+      # an empty domain, rather than surfacing a spurious NaN-filled row.
+      dplyr::filter(nPlots > 0)
+
     # Snag the names
     tNames <- names(tOut)[names(tOut) %in% grpBy == FALSE]
     

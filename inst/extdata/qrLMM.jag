@@ -2,7 +2,7 @@
 model {
 
   ## Priors on the fixed effects
-  fe_alpha ~ dnorm(6, pow(1, -2))
+  fe_alpha ~ dnorm(7, pow(1, -2))
   fe_beta ~ dnorm(-.8025, pow(.1, -2))
 
   ## Hyperpriors on random effect SD

@@ -2,7 +2,7 @@ fsiStarter <- function(x, db, grpBy_quo = NULL, scaleBy_quo = NULL, polys = NULL
                        returnSpatial = FALSE, bySpecies = FALSE, bySizeClass = FALSE,
                        landType = 'forest', treeType = 'live', method = 'TI',
                        lambda = .5, treeDomain = NULL, areaDomain = NULL,
-                       totals = FALSE, byPlot = FALSE, useSeries = FALSE,
+                       byPlot = FALSE, useSeries = FALSE,
                        mostRecent = FALSE, nCores = 1, remote, mr) {
   
   # Read required data, prep the database -------------------------------------

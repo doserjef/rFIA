@@ -13,7 +13,7 @@ fsi(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
     bySpecies = FALSE, bySizeClass = FALSE,
     landType = "forest", treeType = "live", method = "TI",
     lambda = 0.5, treeDomain = NULL, areaDomain = NULL,
-    totals = TRUE, variance = TRUE, byPlot = FALSE,
+    variance = TRUE, byPlot = FALSE,
     useSeries = FALSE, mostRecent = FALSE, scaleBy = NULL,
     betas = NULL, returnBetas = FALSE, nCores = 1)
 }
@@ -43,8 +43,6 @@ fsi(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
   \item{treeDomain}{logical predicates defined in terms of the variables in PLOT, TREE, and/or COND tables. Used to define the type of trees for which estimates will be produced (e.g. DBH greater than 20 inches: \code{DIA > 20}, Dominant/Co-dominant crowns only: \code{CCLCD \%in\% c(2,3)}). Multiple conditions are combined with \code{&} (and) or \code{|} (or). Only trees where the condition evaluates to TRUE are used in producing estimates. Should NOT be quoted.}
 
   \item{areaDomain}{logical predicates defined in terms of the variables in PLOT and/or COND tables. Used to define the area for which estimates will be produced (e.g. within 1 mile of improved road: \code{RDDISTCD \%in\% c(1:6)}, Hard maple/basswood forest type: \code{FORTYPCD == 805)}. Multiple conditions are combined with \code{&} (and) or \code{|} (or). Only plots within areas where the condition evaluates to TRUE are used in producing estimates. Should NOT be quoted.}
-
-  \item{totals}{logical; if TRUE, return total population estimates (e.g. total area) along with ratio estimates (e.g. mean trees per acre).}
 
     \item{variance}{logical; if TRUE, return estimated variance (\code{VAR}) and sample size (\code{N}). If FALSE, return 'sampling error' (\code{SE}) as returned by EVALIDator. Note: sampling error cannot be used to construct confidence intervals.}
 
