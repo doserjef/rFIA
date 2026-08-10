@@ -1,5 +1,30 @@
 # rFIA (development version)
 
++ Fixed a bug in `growMort()` where `GROW_*`/`CHNG_*` (survivor growth / net change) were computed
+  incorrectly for every state variable except the default `TPA` -- `BAA`, volume, biomass, and carbon
+  outputs were all affected. The previous-period population total was reconstructed using each departed
+  tree's *midpoint* measurement (correct for the separately-reported `MORT_*`/`REMV_*` columns) instead
+  of its *begin* measurement, which EVALIDator's own growth-accounting definition of "net growth"
+  requires; a second, related bug caused mismatched `NA` handling across the `RECR`/`MORT`/`REMV`/`GROW`
+  columns for volume-based state variables (`NETVOL`, `SAWVOL`, `SAWVOL_BF`), whose underlying FIADB
+  columns are undefined for some trees below merchantability thresholds. `MORT_*`/`REMV_*` themselves,
+  and every output under the default `stateVar = 'TPA'`, were unaffected. This is likely related to the
+  "`growMort()` reporting zero survivor growth" bug fixed in v1.1.1; see
+  `core_references/validation/growMort.md` for full detail.
++ Fixed a bug in `growMort()` where state variables derived from tree biomass (`BIO_AG`, `BIO_BG`,
+  `BIO`, `CARB_AG`, `CARB_BG`, `CARB`) were reported in pounds instead of short tons/acre -- 2000x too
+  large -- because the lbs-to-short-tons conversion applied everywhere else in the package (`biomass()`,
+  `carbon()`) was missing from `growMort()`'s state-variable handling.
++ Fixed a bug in `growMort()` where an `areaDomain` filter was evaluated against a tree's *previous*
+  remeasurement condition rather than its current one, understating `MORT_*`/`REMV_*`/`RECR_*` estimates
+  in states with meaningful physiographic-class turnover between remeasurements (up to -6% in checks
+  against EVALIDator). This is the same bug already fixed in `vitalRates()`; see
+  `core_references/validation/growMort.md`.
++ Fixed a bug in `growMort()` where the `SUBP_COND_CHNG_MTRX`-based growth-accounting area-change
+  calculation hardcoded `SUBPTYP == 1`, silently discarding area-change information for any condition
+  measured on the macroplot and understating `landType = 'forest'` estimates (and `nPlots_AREA`) in
+  macroplot-heavy states (e.g. Pacific Northwest). This is the same bug already fixed in `vitalRates()`;
+  see `core_references/validation/growMort.md`.
 + Fixed a bug in `fsi()` where the plot-level remeasurement interval (`REMPER`) was incorrectly
   multiplied by the subplot/microplot/macroplot nonresponse adjustment factor before being used as a
   grouping key to recombine a plot's per-plot-basis rows back into a single row. Because that
