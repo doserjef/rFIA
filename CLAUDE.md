@@ -31,6 +31,7 @@ Tests and checks require system libraries, not just R packages:
 - `Suggests: R2jags, coda` means JAGS must be installed system-side for any code path touching the
   quantile-regression models in `inst/extdata/*.jag`
 - Minimum R version is 4.1.0 — the codebase uses native lambda syntax (`\(x) ...`) throughout
+- For running and testing R code, use the R installation found at `~/R-4.6.0` and the associated packages installed at `~/R/x86_64-pc-linux-gnu-library/4.6`.
 
 ## Documentation: do NOT run `devtools::document()`
 

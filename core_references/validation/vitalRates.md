@@ -371,9 +371,9 @@ sane values (`treeList`'s `SAWVOL_GROW` is legitimately `NA` for non-sawtimber-s
 how `VOLBFNET` itself is undefined below the sawtimber threshold in raw FIADB data -- not a bug). Full
 package test suite re-run with no regressions.
 
-## Known issues (identified this pass, not yet resolved)
+## Known issues and intentional divergences from EVALIDator
 
-### A. `landType = 'timber'` over-counts `nPlots_AREA` by a small margin in macroplot-heavy states
+### A. `landType = 'timber'` over-counts `nPlots_AREA` by a small margin in macroplot-heavy states -- root-caused, kept intentionally (not a bug)
 
 After fix #3 above made `landType = 'forest'` match EVALIDator exactly in OR/CA/WA, `landType =
 'timber'` in those same three states -- which matched EVALIDator exactly *before* fix #3 -- now
@@ -395,15 +395,61 @@ This was investigated in some depth without a confirmed resolution:
   always does, for these rows). Ruled out: requiring `SITECLCD` to be stable between periods
   (overcorrects drastically -- drops the count to 6056, far below EVALIDator's 7749 -- so ordinary
   site-class reclassification between remeasurements is not the discriminating factor).
-- Not yet tried: obtaining EVALIDator's actual SQL for the `EXPGROW`-type timberland-denominator
-  attribute specifically (the guide's worked example is for the simpler `EXPCHNG` area-change eval
-  type, which may not be identical for growth attributes), or documentation more specific to
-  macroplot-basis timberland classification during growth accounting.
+- Not yet tried (at the time): obtaining EVALIDator's actual SQL for the `EXPGROW`-type
+  timberland-denominator attribute specifically (the guide's worked example is for the simpler
+  `EXPCHNG` area-change eval type, which may not be identical for growth attributes), or documentation
+  more specific to macroplot-basis timberland classification during growth accounting.
 
 Point estimates for `landType = 'timber'` in these three states are correspondingly off by a similar
-small margin (e.g. OR: rFIA `1.367651` vs. EVALIDator `1.366364`, +0.09%). This is now the only known
-open discrepancy from this validation pass -- Known Issues B (`areaDomain`) and C (`SAWVOL_GROW_AC`,
-`gs`) from earlier in this pass were root-caused and fixed (see "Fixed" #4 and #5 above).
+small margin (e.g. OR: rFIA `1.367651` vs. EVALIDator `1.366364`, +0.09%). Known Issues B (`areaDomain`)
+and C (`SAWVOL_GROW_AC`, `gs`) from earlier in this pass were root-caused and fixed (see "Fixed" #4 and
+#5 above); Known Issue A was root-caused in a follow-up session (below) but deliberately left unfixed.
+
+#### Resolution (follow-up session, 2026-08-11): root-caused via EVALIDator's actual generated SQL; kept as an intentional divergence
+
+The "not yet tried" step above was completed: rather than relying on the static attribute metadata in
+`EVALIDATOR_POP_ESTIMATE.csv` (which has no row for a timberland growth-accounting *denominator* at
+all -- ratio denominators are generated dynamically by EVALIDator, not stored as their own attribute),
+the FIADB-API `fullreport` endpoint's response includes a `metadata.denSql`/`metadata.numSql` field
+containing the *actual* SQL EVALIDator ran for that specific query. Pulling this for OR EVALID 412203
+(`fetch_evalidator.R`-style query, `snum=2636` (timberland biomass growth) `sdenom=3` vs. `snum=2635`
+(forest biomass growth) `sdenom=2`) shows EVALIDator itself treats the two land bases inconsistently:
+
+- **Forest-land denominator** (`sdenom=2`) restricts the `SUBP_COND_CHNG_MTRX` (SCCM) join with
+  `((SCCM.SUBPTYP = 3 AND COND.PROP_BASIS = 'MACR') OR (SCCM.SUBPTYP = 1 AND COND.PROP_BASIS =
+  'SUBP'))` -- the dual-branch match this pass's fix #3 implements, taken directly from the guide's
+  Ch. 7.8 Example 7-12 (`SUBP_COND_CHNG_MTRX` worked example, itself an `EXPCHNG`/forest-land example).
+- **Timberland denominator** (`sdenom=3`) has **no such branch**: it hardcodes `WHERE SCCM.SUBPTYP=1`
+  unconditionally (plus the `RESERVCD`/`SITECLCD` timberland-productivity filters), while its `SELECT`
+  clause still multiplies by `CASE COND.PROP_BASIS WHEN 'MACR' THEN POP_STRATUM.ADJ_FACTOR_MACR ELSE
+  POP_STRATUM.ADJ_FACTOR_SUBP END` -- i.e. for a `MACR`-basis condition, it applies the *macroplot*
+  adjustment factor to a *subplot*-level (`SUBPTYP=1`) SCCM proportion, a combination that doesn't
+  correspond to any physically meaningful quantity. It never even reads the `SUBPTYP=3` (macroplot)
+  SCCM rows for timberland.
+
+This is the direct, confirmed cause of the over-count: rFIA's fix #3 (correctly) reads macroplot-basis
+SCCM rows for both land bases per the guide's documented rule, while EVALIDator's own timberland
+template only ever reads the subplot-basis rows, silently dropping macroplot-basis timberland area
+change. Exhaustively searching the FIA Population Estimation User Guide (`core_references/
+fia_pop_estimation_user_guide.pdf`, ch. 7) turns up no worked example of a timberland or `EXPGROW`
+growth-accounting denominator at all -- the guide's only SCCM dual-branch worked example (Ch. 7.8,
+Example 7-12) is for forest land under `EXPCHNG`. There is no documented, principled reason given
+anywhere for excluding macroplot-basis timberland conditions from growth-accounting area; combined with
+the internally mismatched `SUBPTYP`/`ADJ_FACTOR` pairing found above, this looks like an omission in
+EVALIDator's own timberland-ratio query template (the dual-branch fix applied to the forest-land
+template apparently was never carried over to the timberland one), not a deliberate methodological
+choice.
+
+**Decision (user sign-off, 2026-08-11): do not change `vitalRatesStarter.R` to replicate this.** rFIA's
+current `aChng` logic (`(SUBPTYP == 1 & PROP_BASIS == 'SUBP') | (SUBPTYP == 3 & PROP_BASIS == 'MACR')`,
+applied uniformly regardless of `landType`) already implements the guide's own documented rule
+correctly and consistently for both land bases -- the more statistically defensible behavior, since it
+doesn't silently discard sampled macroplot area the way EVALIDator's timberland template does. Matching
+EVALIDator's timberland output exactly here would mean deliberately reintroducing the same
+class of bug fix #3 fixed for forest land, scoped narrowly to `landType = 'timber'`. This ~0.5-0.7%
+residual in OR/CA/WA `landType = 'timber'` is therefore an intentional, understood divergence from
+EVALIDator, not an open bug -- no further action planned. The identical shared-code pattern in
+`growMortStarter.R` (see `growMort.md`) is covered by the same decision.
 
 ## Notes
 
@@ -421,8 +467,10 @@ bug-handling protocol (which covers numeric mismatches).
 
 ## Deferred to follow-up (not covered this pass)
 
-- Known Issue A above (`landType = 'timber'` `nPlots_AREA` over-count in macroplot-heavy states) is
-  under active investigation but not yet resolved as of this writing.
+- ~~Known Issue A above (`landType = 'timber'` `nPlots_AREA` over-count in macroplot-heavy states) is
+  under active investigation but not yet resolved as of this writing.~~ Root-caused in a follow-up
+  session and kept as an intentional divergence from EVALIDator, not fixed -- see "Known issues and
+  intentional divergences from EVALIDator" above.
 - Whether a `DIA`-based `treeDomain` filter matches EVALIDator despite the `tD.prev`-vs-current-`TREE`
   timing difference noted above -- a species-based filter was used instead for the numeric
   cross-check tests, matching `tpa.md`'s fallback for filters not meaningful nationally.

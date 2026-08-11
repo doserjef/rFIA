@@ -679,6 +679,48 @@ growMortStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                       gPlot_cv_t = gPlot_cv, cPlot_cv_t = cPlot_cv)
       tEst <- dplyr::left_join(tEst, ttEst, by = c('ESTN_UNIT_CN', grpBy))
 
+      # Event-specific plot counts (growMort.Rd documents nPlots_RECR/
+      # nPlots_MORT/nPlots_REMV/nPlots_GROW alongside nPlots_TREE, which
+      # counts plots contributing to *any* event -- RECR/MORT/REMV/
+      # survivor-growth combined). Re-uses sumToEU's existing strata/EU
+      # plot-count machinery (nPlots.x, an unweighted count of distinct
+      # PLT_CN, additive across strata and estimation units) rather than
+      # reimplementing it, applied to a version of tPlt restricted to the
+      # one relevant column and filtered to plots with a non-zero RECR/MORT/
+      # REMV/GROW contribution respectively. tPlt itself never carries YEAR
+      # (dropped by sumToPlot's final summarize); sumToEU adds it back
+      # internally via its join to `pops`, so only the grpBy columns tPlt
+      # actually has are selected here, while the full (YEAR-including)
+      # grpBy is still passed as sumToEU's x.grpBy, matching the pattern
+      # already used for tEst/ttEst above.
+      tPltGrpBy <- grpBy[grpBy != 'YEAR']
+      rEu <- sumToEU(db, dplyr::select(tPlt, ESTN_UNIT_CN, STRATUM_CN, PLT_CN, all_of(tPltGrpBy), rPlot) %>%
+                        dplyr::filter(rPlot != 0),
+                     NULL, pops, grpBy, NULL, method, lambda)
+      mEu <- sumToEU(db, dplyr::select(tPlt, ESTN_UNIT_CN, STRATUM_CN, PLT_CN, all_of(tPltGrpBy), mPlot) %>%
+                        dplyr::filter(mPlot != 0),
+                     NULL, pops, grpBy, NULL, method, lambda)
+      hEu <- sumToEU(db, dplyr::select(tPlt, ESTN_UNIT_CN, STRATUM_CN, PLT_CN, all_of(tPltGrpBy), hPlot) %>%
+                        dplyr::filter(hPlot != 0),
+                     NULL, pops, grpBy, NULL, method, lambda)
+      # gPlot is a differenced quantity (cPlot - rPlot + mPlot + hPlot), so a
+      # plot with no real survivor growth can still land a hair off zero from
+      # floating-point noise -- same reasoning as the GROW_TPA rounding fix
+      # below (abs(.x) < 1e-5 treated as zero), applied here to the filter
+      # instead of after the fact.
+      gEu <- sumToEU(db, dplyr::select(tPlt, ESTN_UNIT_CN, STRATUM_CN, PLT_CN, all_of(tPltGrpBy), gPlot) %>%
+                        dplyr::filter(abs(gPlot) >= 1e-5),
+                     NULL, pops, grpBy, NULL, method, lambda)
+      ePlt <- rEu$x %>%
+        dplyr::select(ESTN_UNIT_CN, all_of(grpBy), nPlots_RECR = nPlots.x) %>%
+        dplyr::full_join(dplyr::select(mEu$x, ESTN_UNIT_CN, all_of(grpBy), nPlots_MORT = nPlots.x),
+                         by = c('ESTN_UNIT_CN', grpBy)) %>%
+        dplyr::full_join(dplyr::select(hEu$x, ESTN_UNIT_CN, all_of(grpBy), nPlots_REMV = nPlots.x),
+                         by = c('ESTN_UNIT_CN', grpBy)) %>%
+        dplyr::full_join(dplyr::select(gEu$x, ESTN_UNIT_CN, all_of(grpBy), nPlots_GROW = nPlots.x),
+                         by = c('ESTN_UNIT_CN', grpBy))
+      tEst <- dplyr::left_join(tEst, ePlt, by = c('ESTN_UNIT_CN', grpBy))
+
       out <- list(tEst = tEst, aEst = aEst, grpBy = grpBy, aGrpBy = aGrpBy)
 
     }

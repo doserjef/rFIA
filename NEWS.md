@@ -1,5 +1,14 @@
 # rFIA (development version)
 
++ `growMort()` now returns `nPlots_RECR`, `nPlots_MORT`, `nPlots_REMV`, and `nPlots_GROW` -- separate
+  non-zero-plot counts for recruitment, mortality, harvest removal, and survivor growth, respectively.
+  The first three were already documented in `growMort.Rd` but never actually implemented;
+  `nPlots_GROW` is a new addition alongside them for consistency. Previously, only a single generic
+  `nPlots_TREE` (count of plots contributing to *any* of recruitment/mortality/removal/survivor-growth
+  combined) was returned, which understates the degrees of freedom appropriate for a t-based confidence
+  interval on an individual `MORT_*`/`REMV_*`/`RECR_*`/`GROW_*` rate. `nPlots_TREE` is unchanged.
+  Confirmed against EVALIDator's plot counts for the mortality/harvest-removal attributes (exact
+  match); see `core_references/validation/growMort.md`.
 + Fixed a bug in `growMort()` where `GROW_*`/`CHNG_*` (survivor growth / net change) were computed
   incorrectly for every state variable except the default `TPA` -- `BAA`, volume, biomass, and carbon
   outputs were all affected. The previous-period population total was reconstructed using each departed

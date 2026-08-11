@@ -102,6 +102,7 @@ Dataframe or sf object (if \code{returnSpatial = TRUE}). If \code{byPlot = TRUE}
       \item{\strong{nPlots_RECR}: number of non-zero plots used to compute recruitment estimates}
       \item{\strong{nPlots_MORT}: number of non-zero plots used to compute mortality estimates}
       \item{\strong{nPlots_REMV}: number of non-zero plots used to compute removal estimates}
+      \item{\strong{nPlots_GROW}: number of non-zero plots used to compute survivor growth estimates}
       \item{\strong{nPlots_AREA}: number of non-zero plots used to compute land area estimates}
       }
 }

@@ -106,11 +106,19 @@ identity.
 
 `landType = 'timber'` (attrs 904/916): **exact match** in RI, NC, CO. **OR shows a small residual
 mismatch** (`MORT_TPA` rFIA `1.672704` vs. EVALIDator `1.671130`, +0.09%; `nPlots_AREA` 7788 vs. 7749)
--- this is the identical, already-investigated-and-unresolved "Known Issue A" from `vitalRates.md`
-(macroplot-heavy states' timberland denominator), inherited via the shared `SUBP_COND_CHNG_MTRX`-based
-area-change logic. Not re-investigated here; see `vitalRates.md` for the extensive (inconclusive)
-investigation already done. `growMort()`'s test suite checks this case with a loose (<1%) tolerance
-rather than exact equality, consistent with that prior finding.
+-- this is the identical "Known Issue A" from `vitalRates.md` (macroplot-heavy states' timberland
+denominator), inherited via the shared `SUBP_COND_CHNG_MTRX`-based area-change logic. Not
+re-investigated independently here; see `vitalRates.md`'s "Known issues and intentional divergences
+from EVALIDator" section for the full root-cause writeup -- **root-caused in a 2026-08-11 follow-up
+session and confirmed to be a documented, intentional divergence from EVALIDator, not a bug**:
+EVALIDator's own generated SQL for the timberland growth-accounting denominator (obtained live via the
+FIADB-API `fullreport` endpoint's `metadata.denSql` field) hardcodes `SCCM.SUBPTYP=1` with no
+macroplot (`SUBPTYP=3`) branch, silently excluding macroplot-basis timberland area from its own
+denominator, while `growMortStarter.R`'s `aChng` (fix #1 above) correctly implements the FIA
+Population Estimation Guide's documented dual-branch rule (`SUBPTYP` matched to `PROP_BASIS`)
+uniformly for both land bases -- the more statistically defensible behavior. `growMort()`'s test suite
+checks this case with a loose (<1%) tolerance rather than exact equality, and no code change is planned
+to force an exact match here.
 
 ### `areaDomain` (mesic physiographic classes), 4 states
 
@@ -329,7 +337,7 @@ GROW + RECR - MORT - REMV` identity now holds (to floating-point precision) for 
 
 ## Notes
 
-### `nPlots_TREE` is a single generic column, not a per-event plot count
+### `nPlots_TREE` is a single generic column, not a per-event plot count -- FIXED (follow-up pass)
 
 `growMort.Rd`'s Value section documents `nPlots_RECR`, `nPlots_MORT`, `nPlots_REMV` as separate output
 columns (implying a distinct plot count per event type, presumably intended for computing the correct
@@ -338,11 +346,42 @@ returns a single `nPlots_TREE` (count of plots contributing to *any* of recruitm
 survivor-growth combined) alongside `nPlots_AREA`. Confirmed: RI's unrestricted `nPlots_TREE = 107`
 matches neither EVALIDator's mortality-attribute plot count (86) nor its removals-attribute plot count
 (13) -- it's a broader, different quantity by design, not a bug (`nPlots_TREE` does correctly shrink
-under `treeDomain`/`bySpecies`, confirming it responds to filtering, just not per-event). This is a
-pre-existing documentation/implementation gap (the three per-event columns appear to never have been
-implemented), not something introduced or touched this pass -- flagged here rather than fixed, since
-deciding whether to implement the three missing columns or correct the documentation is a design
-decision outside this pass's numeric-correctness scope.
+under `treeDomain`/`bySpecies`, confirming it responds to filtering, just not per-event). This was
+originally a pre-existing documentation/implementation gap (the three per-event columns appear to never
+have been implemented), flagged rather than fixed during the main pass since deciding whether to
+implement the three missing columns or correct the documentation was a design decision outside that
+pass's numeric-correctness scope.
+
+**Follow-up fix**: implemented `nPlots_RECR`/`nPlots_MORT`/`nPlots_REMV` in `growMortStarter.R`,
+matching the documentation rather than correcting it. A fourth column, `nPlots_GROW` (non-zero plots
+for survivor growth), was added alongside them at the user's request even though `growMort.Rd` didn't
+originally list it, for consistency with the other three event types. Each is computed by re-using
+`sumToEU()`'s existing strata/estimation-unit plot-count machinery (the same `nPlots.x` logic already
+powering `nPlots_TREE`/`nPlots_AREA` throughout the package), called on a version of the plot-level
+tree table (`tPlt`) restricted to the one relevant column and filtered to plots with a non-zero
+RECR/MORT/REMV/GROW contribution, respectively -- rather than reimplementing the strata-weighted
+aggregation from scratch. `gPlot` (survivor growth) is a differenced quantity (`cPlot - rPlot + mPlot +
+hPlot`), so a plot with no real survivor growth can land a hair off exact zero from floating-point
+noise; `nPlots_GROW`'s filter uses the same `abs(.x) < 1e-5` tolerance already applied to `GROW_TPA`
+elsewhere in `growMort()` (see "Results", core default case) rather than an exact `!= 0` test, to avoid
+counting that noise as a real contribution. `nPlots_TREE` itself is unchanged (still the broader
+any-event count).
+
+**Verification**: RI (unrestricted, `landType = 'forest'`), freshly pulled `mostRecent` data:
+`nPlots_MORT = 87` matches EVALIDator attribute 901's `numPlotCount` (87) exactly; `nPlots_REMV = 13`
+matches attribute 913's `numPlotCount` (13) exactly (both counts confirmed via `fetch_evalidator.R`,
+same mechanism used throughout this report). `nPlots_RECR`/`nPlots_GROW` have no EVALIDator equivalent
+(ingrowth has no matching attribute at all, per the "Attribute mapping" section above, and `GROW_*` was
+already established to have none either) and were checked only for internal sanity
+(`nPlots_RECR`/`nPlots_MORT`/`nPlots_REMV`/`nPlots_GROW` all `<= nPlots_TREE` in every case tried;
+RI's default case gives `nPlots_GROW = 7`, plausible under `stateVar = 'TPA'` since a tree only
+registers nonzero survivor growth there when it crosses the microplot/subplot size threshold between
+measurements -- a comparatively rare event -- not on ordinary diameter growth). Also checked:
+`bySpecies` (each species' new columns shrink sensibly and independently per species), `totals = TRUE`,
+`landType = 'timber'`, and an empty `treeDomain` (clean 0-row result, no warning) -- all pass. `byPlot =
+TRUE` is a separate, untouched code path and does not return `nPlots_*` columns (unchanged pre-existing
+behavior). Full `test-growMort.R` suite (124 assertions, network-backed) re-run with no
+regressions.
 
 ## Deferred to follow-up (not covered this pass)
 
@@ -356,6 +395,9 @@ decision outside this pass's numeric-correctness scope.
   but not independently cross-checked against EVALIDator this pass (only `BIO_AG`, `NETVOL`, and
   `SAWVOL_BF` were) -- they share the exact code path already validated for those three, but a direct
   check would be worth adding in a follow-up pass.
-- `landType = 'timber'`'s macroplot-heavy-state residual (OR, and per `vitalRates.md`, likely CA/WA) --
-  inherited unresolved from the `vitalRates()` pass; not re-investigated here.
-- The `nPlots_RECR`/`nPlots_MORT`/`nPlots_REMV` documentation/implementation gap noted above.
+- ~~`landType = 'timber'`'s macroplot-heavy-state residual (OR, and per `vitalRates.md`, likely CA/WA)
+  -- inherited unresolved from the `vitalRates()` pass; not re-investigated here.~~ Root-caused in a
+  2026-08-11 follow-up session (see `vitalRates.md`) and kept as an intentional divergence from
+  EVALIDator, not fixed -- see "Results" above.
+- ~~The `nPlots_RECR`/`nPlots_MORT`/`nPlots_REMV` documentation/implementation gap noted above.~~ Fixed
+  in a follow-up pass -- see "Notes" above.
