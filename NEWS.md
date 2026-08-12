@@ -1,5 +1,30 @@
 # rFIA (development version)
 
++ `tpa()`, `biomass()`, `carbon()`, `volume()`, `growMort()`, `vitalRates()`, `diversity()`, `fsi()`,
+  `area()`, `areaChange()`, `standStruct()`, and `seedling()` now warn when `grpBy` includes `SUBP`.
+  Unlike every other `grpBy` variable these functions support (species, size class, ownership group,
+  etc.), which partition trees/conditions within the same shared sampled area, `SUBP` denotes a
+  physically distinct sub-area of the plot -- each subplot covers different ground. Grouping by `SUBP`
+  still produces a mathematically valid partition of the plot-level per-acre estimate (each subplot's
+  value is its share of the total, and the four values sum back to the ungrouped estimate exactly), but
+  it is not a re-weighted, subplot-local density, since the area denominator is not re-weighted to match
+  each subplot's own area. Documented in each function's `Details` section (issue #31).
++ Fixed a bug in `growMort()` and `vitalRates()` where `bySizeClass = TRUE` silently dropped removed
+  (harvested) and dead trees whose current-cycle diameter went unmeasured -- common for trees that are
+  too decayed, broken, or fully removed to measure at the time of remeasurement. `sizeClass` was
+  computed from the tree's current diameter and any row with a missing value was dropped before it was
+  ever joined to the growth/mortality/removal tables, even though those same tables already provide a
+  usable midpoint or begin diameter for exactly these trees. Confirmed against OR, where this undercut
+  `growMort()`'s harvested-basal-area estimate by up to 99% and its mortality estimate by up to 25% when
+  `bySizeClass = TRUE`; `bySizeClass = TRUE` totals (summed back across size classes) now match
+  `bySizeClass = FALSE` exactly in both functions (issue #40).
++ Documented in `tpa.Rd` why tree records with a missing diameter (`DIA`) -- most often standing dead
+  trees revisited after death, common in western US inventories -- are excluded from `tpa()` estimates
+  regardless of `treeType`: these records also lack `TPA_UNADJ` (FIA's per-acre expansion factor, which
+  itself depends on `DIA` to determine subplot design), so they have no valid per-acre weight under
+  FIA's design-based estimator and are excluded from EVALIDator's estimates for the same reason.
+  Confirmed `treeType = 'dead'` still matches EVALIDator to full precision in OR, where this affects a
+  large fraction of dead-tree records (issue #32).
 + `growMort()` now returns `nPlots_RECR`, `nPlots_MORT`, `nPlots_REMV`, and `nPlots_GROW` -- separate
   non-zero-plot counts for recruitment, mortality, harvest removal, and survivor growth, respectively.
   The first three were already documented in `growMort.Rd` but never actually implemented;

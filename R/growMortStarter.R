@@ -239,11 +239,14 @@ growMortStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # carbon fractions regardless of reporting by species.
     grpBy <- c(grpBy, 'SPCD', 'COMMON_NAME', 'SCIENTIFIC_NAME')
   } 
-  # Break into size classes
+  # Break into size classes. The actual sizeClass column is assigned further
+  # below, once `data` has been joined to TREE_GRM_MIDPT/TREE_GRM_BEGIN --
+  # not here on db$TREE alone. Mortality/removal trees frequently have no
+  # current-cycle (T2) DIA (the tree is dead or gone and couldn't be
+  # measured), which would otherwise drop them from db$TREE before their GRM
+  # contribution is ever computed (issue #40).
   if (bySizeClass) {
     grpBy <- c(grpBy, 'sizeClass')
-    db$TREE$sizeClass <- makeClasses(db$TREE$DIA, interval = 2, numLabs = TRUE)
-    db$TREE <- db$TREE[!is.na(db$TREE$sizeClass), ]
   }
 
   # Prep the tree list ----------------------------------------------------
@@ -428,7 +431,28 @@ growMortStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
                   tDI_r = landD * aD * tD * typeD * sp * tChng, # All previous attributes NA for recruitment
                   aDI = landD * aD * sp * aChng) %>%
     as.data.frame()
-    
+
+  # Assign size class using whichever diameter is actually available for a
+  # given tree/period: current (T2) DIA for survivors/recruits, falling back
+  # to the midpoint or begin diameter (DIA.mid/DIA.beg, from the joins above)
+  # for mortality/removal trees -- the same diameter sources already used to
+  # compute their state value earlier in this function. Confirmed against OR
+  # GRM data that this coalesce covers every mortality/removal tree with a
+  # missing T2 DIA (issue #40).
+  #
+  # NOTE: rows with an unclassifiable sizeClass are intentionally NOT dropped
+  # from `data` here. `data` also backs the forested-area denominator (`a`/
+  # `aData`) via one row per (PLT_CN, CONDID) for conditions with zero
+  # tally trees; dropping rows from `data` wholesale would silently remove
+  # those zero-tree conditions from the area total too, inflating every
+  # per-acre estimate uniformly. The size-class-NA filter is instead applied
+  # further below, only to the tree list (`t`), after it's confirmed to be an
+  # actual GRM-contributing tree row.
+  if (bySizeClass) {
+    data$sizeClass <- makeClasses(dplyr::coalesce(data$DIA, data$DIA.mid, data$DIA.beg),
+                                  interval = 2, numLabs = TRUE)
+  }
+
   if ('SUBP_COND_CHNG_MTRX' %in% names(db)) {
     # Doing area separately now for growth accounting plots 
     aData <- dplyr::select(db$PLOT, c(PLT_CN, STATECD, MACRO_BREAKPOINT_DIA,
@@ -502,7 +526,13 @@ growMortStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
 
     t <- data %>%
       dplyr::mutate(YEAR = MEASYEAR) %>%
-      dplyr::distinct(PLT_CN, TRE_CN, COMPONENT, .keep_all = TRUE) %>%
+      dplyr::distinct(PLT_CN, TRE_CN, COMPONENT, .keep_all = TRUE)
+    if (bySizeClass) {
+      # Drop only from the tree list, not from `data`/`a` -- see the note by
+      # the sizeClass assignment above.
+      t <- t[!is.na(t$sizeClass), ]
+    }
+    t <- t %>%
       dtplyr::lazy_dt() %>%
       # Compute estimates at plot level
       dplyr::group_by(!!!grpSyms, PLT_CN, REMPER) %>%
@@ -597,7 +627,13 @@ growMortStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
       dplyr::distinct(PLT_CN, TRE_CN, .keep_all = TRUE) %>%
       # dtplyr::lazy_dt() %>%
       dplyr::filter(!is.na(SUBPTYP_GRM)) %>%
-      dplyr::filter(tDI > 0 | tDI_r > 0) %>%
+      dplyr::filter(tDI > 0 | tDI_r > 0)
+    if (bySizeClass) {
+      # Drop only from the tree list, not from `data`/`a` -- see the note by
+      # the sizeClass assignment above.
+      t <- t[!is.na(t$sizeClass), ]
+    }
+    t <- t %>%
       # Compute estimates at plot level. Every term is coalesced to 0 (rather
       # than left as NA) at the row level: a state variable can be undefined
       # for a given tree/period for reasons unrelated to that row's actual

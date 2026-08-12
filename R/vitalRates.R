@@ -6,6 +6,7 @@ vitalRates <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
 
   # Defuse user-supplied expressions in grpBy, areaDomain, and treeDomain
   grpBy_quo <- rlang::enquo(grpBy)
+  warnRiskyGrpBy(grpBy_quo)
   areaDomain <- rlang::enquo(areaDomain)
   treeDomain <- rlang::enquo(treeDomain)
 

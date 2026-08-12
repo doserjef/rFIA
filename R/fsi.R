@@ -27,6 +27,7 @@ If not already installed, you can install JAGS from SourceForge:
   
   # Defuse user-supplied expressions in necessary arguments. 
   grpBy_quo <- rlang::enquo(grpBy)
+  warnRiskyGrpBy(grpBy_quo)
   scaleBy_quo <- rlang::enquo(scaleBy)
   areaDomain <- rlang::enquo(areaDomain)
   treeDomain <- rlang::enquo(treeDomain)

@@ -371,6 +371,34 @@ sane values (`treeList`'s `SAWVOL_GROW` is legitimately `NA` for non-sawtimber-s
 how `VOLBFNET` itself is undefined below the sawtimber threshold in raw FIADB data -- not a bug). Full
 package test suite re-run with no regressions.
 
+### 6. `bySizeClass` silently dropped mortality/cut/diversion trees whose current-cycle diameter was
+   unmeasured [FIXED -- same bug as growMort() issue #40]
+
+Identical code pattern to the bug found and fixed in `growMort()` (issue #40; see `growMort.md`'s Fixed
+#5 for the full OR-based quantification of how often removal/mortality trees lack a current-cycle
+`DIA`). `vitalRatesStarter.R` computed `sizeClass` from `db$TREE$DIA` and dropped `NA` rows before
+`db$TREE` was joined to `TREE_GRM_MIDPT`/`TREE_GRM_BEGIN` -- even though `vrAttHelper()` a few lines
+later already falls back to the midpoint diameter (`DIA.mid`) for `CUT`/`DIVERSION` components and the
+begin diameter (`DIA.beg`, or the previous tree's own `DIA.prev` as a further fallback) for
+`SURVIVOR`/`CUT1`/`DIVERSION1`/`MORTALITY1` components -- exactly the trees whose current DIA is
+frequently unmeasured.
+
+**Fix**: `sizeClass` is now assigned on `data` (using the same `coalesce(DIA, DIA.mid, DIA.beg)`
+priority as `growMort()`'s fix) after the joins to `TREE_GRM_MIDPT`/`TREE_GRM_BEGIN` but before the
+`DIA`/`DIA.mid`/`DIA.beg` columns are dropped by the subsequent `DIA2`/`DIA1` mutate-and-select step.
+Unlike `growMort()`, it's safe to drop unclassifiable rows from `data` directly here rather than only
+from the downstream tree list: `vitalRates()`'s area denominator (`aData`) is built independently from
+`db$PLOT`/`db$SUBP_COND_CHNG_MTRX`/`db$COND`, never from `data`, so there's no equivalent risk of
+silently shrinking the area total. The final column-selection step (which previously carried
+`sizeClass` through implicitly via a bare `grpT` reference, since it was a real column of `db$TREE`)
+now explicitly includes `dplyr::any_of('sizeClass')`, since `sizeClass` is no longer a `db$TREE` column
+and so is no longer picked up by `grpT` automatically.
+
+**Verification**: on OR's current GRM evaluation, `bySizeClass = TRUE` summed back across classes now
+matches the unrestricted `BA_GROW_AC`/`NETVOL_GROW_AC`/`BIO_GROW_AC` (population-level) and
+`BAA_GROW`/`NETVOL_GROW_AC`/`BIO_GROW_AC` (`byPlot = TRUE`) exactly. Full `test-vitalRates.R` suite
+re-run with no regressions.
+
 ## Known issues and intentional divergences from EVALIDator
 
 ### A. `landType = 'timber'` over-counts `nPlots_AREA` by a small margin in macroplot-heavy states -- root-caused, kept intentionally (not a bug)

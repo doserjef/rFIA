@@ -143,11 +143,14 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     grpBy <- c(grpBy, 'SPCD', 'COMMON_NAME', 'SCIENTIFIC_NAME')
   }
 
-  # Break into size classes
+  # Break into size classes. The actual sizeClass column is assigned further
+  # below, once `data` has been joined to TREE_GRM_MIDPT/TREE_GRM_BEGIN --
+  # not here on db$TREE alone. Mortality/cut/diversion trees frequently have
+  # no current-cycle (T2) DIA (the tree is dead or gone and couldn't be
+  # measured), which would otherwise drop them from db$TREE before their GRM
+  # contribution is ever computed (same bug as growMort() issue #40).
   if (bySizeClass) {
     grpBy <- c(grpBy, 'sizeClass')
-    db$TREE$sizeClass <- makeClasses(db$TREE$DIA, interval = 2, numLabs = TRUE)
-    db$TREE <- db$TREE[!is.na(db$TREE$sizeClass), ]
   }
 
   # Prep the tree list ----------------------------------------------------
@@ -286,6 +289,21 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     as.data.frame() %>%
     distinct()
 
+  # Assign size class using whichever diameter is actually available for a
+  # given tree/period: current (T2) DIA for survivors/recruits, falling back
+  # to the midpoint or begin diameter (DIA.mid/DIA.beg, from the joins above)
+  # for mortality/cut/diversion trees -- the same diameter sources vrAttHelper()
+  # below already uses to compute DIA2/DIA1 for exactly these components. This
+  # must happen before DIA/DIA.mid/DIA.beg are dropped by the mutate-and-select
+  # step below. Unlike growMort(), it's safe to drop unclassifiable rows from
+  # `data` directly here: vitalRates()'s area denominator (`aData`) is built
+  # independently from db$PLOT/db$SUBP_COND_CHNG_MTRX/db$COND, not from `data`.
+  if (bySizeClass) {
+    data$sizeClass <- makeClasses(dplyr::coalesce(data$DIA, data$DIA.mid, data$DIA.beg),
+                                  interval = 2, numLabs = TRUE)
+    data <- data[!is.na(data$sizeClass), ]
+  }
+
   # Adjust tree domain indicator if only considering live trees
   if (tolower(treeType) == 'live') {
     data$tDI <- data$tDI * data$status
@@ -324,6 +342,7 @@ vitalRatesStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   # Only grab what's needed
   data <- data %>%
     dplyr::select(PLT_CN, TRE_CN, SUBP, CONDID, TREE, tDI, grpP, grpC, grpT,
+                  dplyr::any_of('sizeClass'),
                   TPAGROW_UNADJ, TPAGROW_UNADJ_SAW, PROP_BASIS, SUBPTYP_GRM, SUBPTYP_GRM_SAW,
                   PLOT_STATUS_CD, DIA2, DIA1, BA2, BA1, DRYBIO_AG2, DRYBIO_AG1, VOLCFNET2,
                   VOLCFNET1, VOLBFNET2, VOLBFNET1, MEASYEAR) %>%

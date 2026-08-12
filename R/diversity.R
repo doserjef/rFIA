@@ -8,6 +8,7 @@ diversity <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
   # Defuse user-supplied expressions in grpBy, areaDomain, treeDomain, 
   # stateVar, and grpVar
   grpBy_quo <- rlang::enquo(grpBy)
+  warnRiskyGrpBy(grpBy_quo)
   areaDomain <- rlang::enquo(areaDomain)
   treeDomain <- rlang::enquo(treeDomain)
   stateVar <- rlang::enquo(stateVar)

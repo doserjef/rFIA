@@ -257,6 +257,42 @@ grpByToChar <- function(db, grpBy_quo){
 
 }
 
+# Warn when grpBy references a column that denotes a physically distinct
+# sub-area of the plot, rather than an attribute of trees/conditions within
+# the same shared area. Currently just SUBP: unlike species, size class,
+# CONDID, etc. (which all partition trees/area within the SAME sampled
+# area, so leaving the area denominator alone is correct), SUBP's four
+# values each correspond to a genuinely different physical sub-area of the
+# plot. Grouping by SUBP still produces a mathematically valid partition of
+# the plot-level per-acre estimate (each subplot's share sums back to the
+# ungrouped total exactly), but it is NOT a re-weighted, subplot-local
+# density -- the area denominator is not currently re-weighted to match,
+# since that would require subplot-level area proportions (SUBP_COND) that
+# none of the estimators currently use. See issue #31.
+#
+# Uses all.vars() on the quosure's unevaluated expression (not the resolved
+# column names from grpByToChar()) so this can run once per top-level
+# dispatcher call, before the lapply over states/iter -- grpByToChar() itself
+# runs once per state, and warning there would fire once per state for a
+# Remote.FIA.Database. This means a SUBP selected via a tidyselect helper
+# (e.g. starts_with('SUB')) won't be caught; that's an acceptable gap for a
+# warning, not a hard gate.
+warnRiskyGrpBy <- function(grpBy_quo) {
+  if ('SUBP' %in% all.vars(rlang::quo_get_expr(grpBy_quo))) {
+    warning(paste(
+      'grpBy includes SUBP: each subplot\'s value is its share of the',
+      'plot-level per-acre estimate, not a re-weighted, subplot-local',
+      'density -- subplot values will not equal what you would get by',
+      'treating each subplot as its own independently sampled acre. This is',
+      'because SUBP denotes a physically distinct sub-area of the plot,',
+      'unlike other grouping variables (species, size class, etc.), and the',
+      'area denominator is not currently re-weighted to match. See Details',
+      'in this function\'s help page for more.'
+    ), call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 # Drop all inventories that are specific to east or west tx. Only retain evals
 # that span the entire state
 handleTX <- function(db){

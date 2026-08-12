@@ -335,6 +335,43 @@ exact in all four states (unaffected by part B, since `DRYBIO_AG` has no relevan
 GROW + RECR - MORT - REMV` identity now holds (to floating-point precision) for every state and every
 `stateVar` tested. Full package test suite re-run with no regressions.
 
+### 5. `bySizeClass` silently dropped nearly all removed/harvested trees, and a large share of mortality
+   trees, from `growMort()` estimates [FIXED -- issue #40]
+
+Reported upstream as issue #40 ("growMort bySizeClass missing removed stems"). Reproduced on OR's current
+GRM evaluation (EVAL_GRP 412022, `stateVar = 'BAA'`): summing `bySizeClass = TRUE` output back across size
+classes gave `REMV_BAA = 0.0141` vs. `1.26` without `bySizeClass` (-98.9%) and `MORT_BAA = 0.848` vs.
+`1.12` (-24.6%); `RECR_BAA` was unaffected (new ingrowth trees almost always have a valid current-cycle
+diameter).
+
+**Root cause**: `growMortStarter.R` computed `sizeClass` from `db$TREE$DIA` -- the tree's current-cycle
+(T2) diameter -- and dropped any row where that was `NA`, *before* `db$TREE` was even joined to the GRM
+tables. A removed (harvested) or dead tree usually can't be measured at T2: confirmed directly against
+OR's `TREE_GRM_COMPONENT` that 17,428 of 17,653 (98.7%) removal-component tree records, and 11,401 of
+33,716 (33.8%) mortality-component tree records, have `DIA = NA` in their T2 `TREE` row. Meanwhile
+`TREE_GRM_MIDPT.DIA` -- the midpoint diameter `growMortStarter.R` already uses elsewhere in the same
+function to compute each row's `state` value for exactly these components -- was populated for 17,652 of
+those same 17,653 (99.99%) removal records, and 11,397 of 11,401 (99.96%) of the DIA-NA mortality records;
+`TREE_GRM_BEGIN.DIA` covered the remainder (0 rows in OR had all three sources NA).
+
+**Fix**: `sizeClass` is now assigned after `data` (the full joined tree list) has been built and joined to
+`TREE_GRM_MIDPT`/`TREE_GRM_BEGIN`, using `makeClasses(dplyr::coalesce(DIA, DIA.mid, DIA.beg), ...)` --
+the same diameter sources, in the same priority order, that the row's own `state` value is already drawn
+from a few lines earlier. A first attempt at this fix dropped size-class-unclassifiable rows directly from
+the shared `data` object, which also backs the forested-area denominator (`a`) via one row per
+`(PLT_CN, CONDID)` for conditions with zero tally trees -- this silently shrank the area denominator for
+any such condition, inflating every ratio by a small but nonzero uniform amount (~0.84% on RECR/MORT/REMV
+alike in OR, confirmed by testing an unrelated grouping variable like `bySpecies` or `grpBy = STATUSCD`,
+which showed no such delta). The corrected fix filters the tree list (`t`, in both the `byPlot` and
+population/`treeList` branches) instead of `data` itself, leaving the area calculation untouched.
+
+**Verification**: on OR's current GRM evaluation, `bySizeClass = TRUE` summed back across classes now
+matches the unrestricted `RECR_BAA`/`MORT_BAA`/`REMV_BAA` to floating-point precision (~1e-14 relative
+difference), in both `byPlot = TRUE` and population-level modes. `treeList = TRUE` row counts are
+identical with and without `bySizeClass` (317,569 rows either way), confirming no trees are dropped.
+Full `test-growMort.R` suite re-run with no regressions. The identical bug (and fix) applies to
+`vitalRates()` -- see `vitalRates.md`.
+
 ## Notes
 
 ### `nPlots_TREE` is a single generic column, not a per-event plot count -- FIXED (follow-up pass)
