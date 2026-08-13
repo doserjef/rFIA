@@ -21,7 +21,7 @@ Three general forms of ratio estimates may be produced: tree-tree, tree-area, an
 
 # Getting started
 
-Users can generate tree/ condition lists using most rFIA estimator functions by setting the argument `treeList = TRUE` or `condList = TRUE`, where the `treeList` argument is available in functions that handle tree-level variables (e.g., `biomass()`, `growMort()`) and `condList` is available in functions that handle condition-level variables (all estimator functions not listed previously).  
+Users can generate tree/ condition lists using most rFIA estimator functions by setting the argument `treeList = TRUE` or `condList = TRUE`, where the `treeList` argument is available in functions that handle tree-level variables (e.g., `biomass()`, `growMort()`) and `condList` is available in functions that handle condition-level variables (e.g., `area()`).  
 
 ```{r, eval = TRUE, echo=TRUE, message = FALSE, warning = FALSE}
 library(rFIA)
@@ -29,12 +29,13 @@ library(dplyr)
 
 # Use volume to generate a tree list associated with the most recent volume
 # inventory in Rhode Island
-tree.list <- fiaRI %>%
-  clipFIA() %>%
+tree.list <- fiaRI |> 
+  clipFIA() |>
   volume(grpBy = c(DIA, SPCD),
          treeList = TRUE)
 
-head(tree.list)
+tree.list |> 
+  glimpse()
 ```
 
 Note that the output above is similar to what you might expect from an `rFIA` function when `byPlot = TRUE`, with the key differences being (1) we've returned a tree/condition list as opposed to a plot list, and (2) the inclusion of `EVAL_TYP`, `TREE_BASIS` and `AREA_BASIS` variables. Here, `TREE_BASIS` and `AREA_BASIS` indicate the primary sampling unit for each tree and condition, respectively (e.g., microplot, subplot, or macroplot). This information is required to "adjust" for non-response using FIA's existing estimation approach. Note also the inclusion of `PROP_FOREST` - indicating the areal extent of the condition upon which each tree is growing, expressed as a proportion of the plot area. As multiple trees generally grow on the same condition, `PROP_FOREST` will be repeated in the tree list.  

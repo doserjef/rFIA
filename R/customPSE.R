@@ -59,12 +59,21 @@ customPSE <- function(db, x, xVars, xGrpBy = NULL, xTransform = NULL,
   req.tables <- c('PLOT', 'POP_EVAL', 'POP_EVAL_TYP', 'POP_ESTN_UNIT', 'POP_STRATUM', 'POP_PLOT_STRATUM_ASSGN')
 
 
-  # If remote, read in state by state. Otherwise, drop all unnecessary tables
+  # Must check mr on the original db, before readRemoteHelper() below pares
+  # it down to only `req.tables` -- that subset silently drops the
+  # `mostRecent` marker clipFIA() attaches to the top-level list, which
+  # otherwise makes checkMR() always report FALSE and skip the combineMR()
+  # relabeling downstream (GitHub issue #47: a spatial mask spanning states
+  # with different "most recent" evaluation years returned separate rows per
+  # year instead of one combined estimate). Every other estimator dispatcher
+  # (e.g. tpa()) already computes mr this way, before any table-paring.
   remote <- ifelse(class(db) == 'Remote.FIA.Database', 1, 0)
+  mr <- checkMR(db, remote = remote)
+
+  # If remote, read in state by state. Otherwise, drop all unnecessary tables
   db <- readRemoteHelper(db$states, db, remote, req.tables, nCores = 1)
 
   # Pull the appropriate population tables
-  mr <- checkMR(db, remote = ifelse(class(db) == 'Remote.FIA.Database', 1, 0))
   pops <- handlePops(db, evalType = x$EVAL_TYP[[1]], method, mr)
 
   # Prep tables ---------------------------------------------------------------

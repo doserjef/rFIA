@@ -1,5 +1,24 @@
 # rFIA (development version)
 
++ Fixed a bug in `customPSE()` (GitHub issue #47) where a spatial mask (or any multi-state call)
+  spanning states with different `mostRecent` evaluation years returned one row per state/year instead
+  of a single combined estimate, unlike `area()`/`tpa()`/etc. on the same masked data. Root cause:
+  `customPSE()` checked `db` for `clipFIA(mostRecent = TRUE)`'s marker *after* an internal helper had
+  already pared `db` down to only the named FIA tables, which silently dropped that marker -- so the
+  step that relabels differing per-state "most recent" years to a common year before combining never
+  ran. Every other estimator dispatcher checks this before any table-paring happens, so none of them
+  were affected. See `core_references/validation/customPSE.md`.
++ Fixed a bug in `customPSE()` where `nPlots_x`/`nPlots_y` were inflated to the full forested-plot
+  count instead of the true number of non-zero contributing plots, whenever `x`/`y` was a tree-based
+  list (e.g. the `treeList = TRUE` output of `tpa()`/`volume()`). Point estimates and standard errors
+  were unaffected -- this was purely a plot-count/reporting bug, but it mattered because `customPSE.Rd`
+  documents `nPlots_x`/`nPlots_y` as the count of *non-zero* plots, used as the degrees of freedom for
+  a t-based confidence interval. Root cause: `sumToPlot()` (`R/util.R`), shared by every estimator, did
+  not filter out the phantom `TREE_BASIS`/`AREA_BASIS = NA` rows that a `treeList`/`condList` output
+  necessarily includes for forested conditions with zero qualifying trees -- each `*Starter.R` file
+  already filters these before its own population-estimate call, but `customPSE()` calls `sumToPlot()`
+  directly on user-supplied data. Confirmed against `tpa()`/`volume()`/`area()` across four states (one
+  per FIA region); see `core_references/validation/customPSE.md`.
 + `tpa()`, `biomass()`, `carbon()`, `volume()`, `growMort()`, `vitalRates()`, `diversity()`, `fsi()`,
   `area()`, `areaChange()`, `standStruct()`, and `seedling()` now warn when `grpBy` includes `SUBP`.
   Unlike every other `grpBy` variable these functions support (species, size class, ownership group,

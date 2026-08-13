@@ -1573,6 +1573,13 @@ sumToPlot <- function(x,
     ## Sum up to plot
     x <- x %>%
       dtplyr::lazy_dt() %>%
+      # Plots/conditions with no qualifying tree carry a phantom
+      # TREE_BASIS = NA row (e.g., from a treeList=TRUE output, where a
+      # condition is left-joined against its trees). They correctly
+      # contribute 0 downstream, but left unfiltered their PLT_CN would
+      # still be counted in nPlots.x/nPlots.y by sumToEU(), mirroring the
+      # nPlots_AREA/CONDID bug fixed in *Starter.R (see tpa.md).
+      dplyr::filter(!is.na(TREE_BASIS)) %>%
       dplyr::group_by(PLT_CN, TREE_BASIS, !!!grp.syms) %>%
       dplyr::summarize(dplyr::across(.cols = c(!!!x.vars), \(x) sum(x, na.rm = TRUE))) %>% 
       dplyr::ungroup() %>%
@@ -1608,6 +1615,9 @@ sumToPlot <- function(x,
     # Sum up to plot
     x <- x %>%
       dtplyr::lazy_dt() %>%
+      # Mirrors the TREE_BASIS filter above: drop phantom AREA_BASIS = NA
+      # rows so their PLT_CN isn't counted in nPlots.x/nPlots.y.
+      dplyr::filter(!is.na(AREA_BASIS)) %>%
       dplyr::group_by(PLT_CN, AREA_BASIS, !!!grp.syms) %>%
       dplyr::summarize(dplyr::across(.cols = c(!!!x.vars), \(x) sum(x, na.rm = TRUE))) %>% 
       dplyr::ungroup() %>%

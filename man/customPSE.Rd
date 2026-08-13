@@ -27,7 +27,7 @@ customPSE(db, x, xVars, xGrpBy = NULL, xTransform = NULL, y = NULL,
 
   \item{yVars}{name of variable in \code{y} to be treated as denominator variables, unquoted. Maximum one denominator variable allowed at this time.}
 
-  \item{yGrpBy}{names of variables in \code{y} to be treated as grouping variables for the numerator, unquoted. Multiple variables should be combined with \code{c()}, e.g., \code{xVars = c(SPCD, OWNGRPCD)}.}
+  \item{yGrpBy}{names of variables in \code{y} to be treated as grouping variables for the denominator, unquoted. Multiple variables should be combined with \code{c()}, e.g., \code{xVars = c(SPCD, OWNGRPCD)}.}
 
   \item{yTransform}{function to be applied to plot-level summaries of denominator variable, e.g., \code{sqrt} or \code{function(x){log(x + 0.001)}}.}
 
