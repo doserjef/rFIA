@@ -329,3 +329,105 @@ test_that("tpa() bySpecies matches EVALIDator per-species (RI)", {
   }
 })
 
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, totals/per-acre plumbing holds regardless of method, and
+# the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md for the full writeup of why).
+# See tests/testthat/test-util.R for the underlying maWeights()/
+# filterAnnual() unit-level checks these per-function tests build on.
+
+# Test 16 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI). Never exactly
+# equal -- lambda never literally reaches 1 in a real call (see
+# test-util.R for why the exact boundary is degenerate) -- so this checks
+# the trend, not a fixed-tolerance snapshot.
+test_that("tpa() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(tpa(db_ri, treeType = 'live', landType = 'forest', method = 'SMA'))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(tpa(db_ri, treeType = 'live', landType = 'forest',
+                             method = 'EMA', lambda = lam))
+    abs(ema$TPA - sma$TPA)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 1)
+})
+
+# Test 17 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general -- TI
+# implicitly weights each panel by its plot count, SMA weights every panel
+# equally regardless of size (see tpa.md for the panel plot-count CV
+# computed for each of these four states). Empirically, across all four
+# states (panel-count CV ranging ~0.6-1.5, i.e. none of them have tightly
+# balanced panels), TI and SMA still landed within ~5% of each other for
+# TPA/BAA, so a single generous relative tolerance is used here rather than
+# a per-state balanced/imbalanced tolerance -- see tpa.md for the
+# measurements that justified this simplification.
+for (st in states) {
+  test_that(paste("tpa() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(tpa(dbs[[st]], treeType = 'live', landType = 'forest', method = 'TI'))
+    sma <- as.data.frame(tpa(dbs[[st]], treeType = 'live', landType = 'forest', method = 'SMA'))
+    expect_equal(sma$TPA, ti$TPA, tolerance = 0.10)
+    expect_equal(sma$BAA, ti$BAA, tolerance = 0.10)
+  })
+}
+
+# Test 18 ------------------------------
+# totals = TRUE / per-acre consistency holds under every non-TI method, not
+# just TI (Test 10 above only checked the TI/default path).
+for (st in states) {
+  test_that(paste("tpa() totals are consistent with per-acre estimates under non-TI methods (", st, ")"), {
+    for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+      out <- as.data.frame(tpa(dbs[[st]], treeType = 'live', landType = 'forest',
+                               method = m, totals = TRUE))
+      expect_equal(out$TREE_TOTAL / out$AREA_TOTAL, out$TPA, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " TPA"))
+      expect_equal(out$BA_TOTAL / out$AREA_TOTAL, out$BAA, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " BAA"))
+    }
+  })
+}
+
+# Test 19 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error.
+test_that("tpa() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(tpa(db_ri, treeType = 'live', landType = 'forest',
+                           method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'TPA', 'BAA') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 20 ------------------------------
+# Domain-filter + bySpecies interaction (the historical
+# area()/areaChange() bug pattern from v1.1.1, see tpa.md Test 15 above)
+# re-run under every non-TI method: no error, no warning, sane shape.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("tpa() domain filter + bySpecies runs cleanly under method =", m, "(", st, ")"), {
+      expect_no_warning(
+        out <- as.data.frame(tpa(dbs[[st]], treeType = 'live', landType = 'forest',
+                                 treeDomain = DIA >= 20, areaDomain = PHYSCLCD %in% 21:29,
+                                 bySpecies = TRUE, method = m))
+      )
+      expect_true(nrow(out) >= 0)
+      expect_true(all(out$TPA >= 0, na.rm = TRUE))
+    })
+  }
+}
+
+# Test 21 ------------------------------
+# Plain default-args EMA smoke test, one per state -- regression coverage
+# for the v1.1.1 "error when setting method = 'EMA'" bug (NEWS.md), which
+# previously had zero dedicated regression tests anywhere in the package.
+for (st in states) {
+  test_that(paste("tpa() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(tpa(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+}
+

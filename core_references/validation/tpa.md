@@ -207,6 +207,102 @@ suite (all 17 estimator test files) re-run with no regressions. Regression tests
 `tests/testthat/test-tpa.R`'s `treeType = 'dead'` test for NC (previously `skip()`-ped) now runs and
 passes; the `treeType = 'all'` consistency check now asserts `>=` instead of `==`.
 
+### 4. `maWeights()` accepted out-of-range/boundary `lambda` and silently returned degenerate weights [FIXED]
+
+Found during non-TI method validation (see "Non-TI method validation" below), not the original
+EVALIDator pass. `man/tpa.Rd` (and every other estimator's man page) documents `lambda` as
+`numeric (0,1)`, but `maWeights()` (`R/util.R`) never validated it. At the exact boundaries,
+`lambda = 1` produced `NaN` weight for every panel (`l = 1-lambda = 0`, so every weight term is
+`0 * 1^(...) = 0` and `sumwgt = 0`, giving `0/0`); `lambda = 0` produced weight `0` for the oldest
+panel and `NaN` for every other panel (`(1-l) = 0`, so `0^(negative exponent) = Inf` for every panel
+but the oldest, making `sumwgt = Inf`). Out-of-range values were worse: `lambda = -0.5` produced a
+negative weight (not a convex combination), and `lambda = 1.5` produced an *inverted* recency
+ordering (oldest panel weighted highest, most recent weighted lowest) — the opposite of what EMA is
+for.
+
+**Root cause**: no input validation in `maWeights()`'s `EMA` branch (`R/util.R:1113-1156`); `lambda`
+was plugged directly into the weighting formula regardless of value.
+
+**Fix**: added a guard at the top of the `EMA` branch that `stop()`s with a clear message if any
+element of `lambda` is `NA`, `<= 0`, or `>= 1`. `maWeights()` is shared by every `sumToEU()`-based
+estimator plus `fsi()` (via `fsiHelper2`) and `customPSE()`, so this validates `lambda` once for all
+of them rather than needing a per-`*Starter.R` copy.
+
+**Verification**: `lambda ∈ {0, 1, -0.5, 1.5, NA}` now error immediately with a clear message instead
+of silently returning degenerate weights; in-range `lambda` (including the default `0.5` and the
+`0.01`–`0.99` grid used elsewhere in this report) is unaffected. Full package test suite re-run with
+no regressions (see "Verification" note at the end of this section). Regression tests added:
+`tests/testthat/test-util.R` now asserts `expect_error()` for each of the boundary/out-of-range
+values.
+
+### 5. `filterAnnual()` did not correctly select the best hosting evaluation for a panel lacking one of its own [FIXED]
+
+Also found during non-TI method validation. A single panel (`INVYR`) is very commonly a constituent
+of *more than one* FIA evaluation's multi-panel window — confirmed directly against RI's real
+`POP_EVAL` table, not assumed: RI's 2013 evaluation (`EVALID` 441300, `EXPVOL`) covers panels
+2009–2013, and its 2014 evaluation (`EVALID` 441400) covers panels 2009–2014, so panel 2009's plot
+data is "hosted" by both. `filterAnnual()`'s job, for `method = 'ANNUAL'`, is to pick — for **each
+panel** — the single best hosting evaluation to draw that panel's standalone estimate from: the
+evaluation whose own nominal year equals the panel's `INVYR` (a "self-hosting" eval, `INVYR == YEAR`)
+if one exists, otherwise whichever hosting eval gives it the most plots. The output is then labeled
+with the panel's own `INVYR`, since `ANNUAL` reports one row per actually-sampled panel-year, not one
+row per evaluation.
+
+The function's `keep` filter compared each candidate only within its own singleton
+`(STATECD, INVYR, YEAR, ...)` group (`YEAR` included), making the comparison a no-op that trivially
+kept every candidate; the real effect then came from a final `dplyr::first()`-based dedup (described
+in the function's own comment as a fallback, not the primary mechanism), which picked among duplicate
+same-`INVYR` rows in whatever order they happened to arrive — not by plot count. This is a faithful
+reading of the function's own long-standing `TODO` comment: *"It doesn't result in selecting a bad
+annual panel, but it may not get the most optimal one."*
+
+**An incorrect first attempt at this fix, and how it was caught**: the first fix inverted the wrong
+axis — it compared candidate *panels* competing for the same reporting `YEAR`, instead of candidate
+*hosting evaluations* competing for the same panel. That version passed its own (also-incorrect) unit
+tests and the full local test suite, but silently discarded valid data: it required a panel to have a
+*self-hosting* evaluation to appear in the output at all, so `tpa(fiaRI, method = 'ANNUAL')` against
+the full unclipped RI history dropped years 2009–2012 and 2003–2004 entirely, and other estimators'
+`ANNUAL` output shrank the same way. This was caught by direct user review before being finalized —
+skepticism about *why* an annual estimator would need a full accumulated cycle before reporting a
+year prompted re-checking the assumption against RI's actual `POP_EVAL`/`POP_PLOT_STRATUM_ASSGN`
+tables (see above), which confirmed panels like 2009 have real, valid hosted data available and
+should appear in the output. The corrected version restores this data.
+
+**Root cause**: `R/util.R`'s `filterAnnual()` grouped its candidate comparison by
+`(STATECD, INVYR, YEAR, ...)` — i.e. including `YEAR` — which makes every group a singleton (one row
+per unique panel/hosting-eval combination) and the `keep` comparison a no-op against itself, in either
+direction (comparing panels-for-a-year or evals-for-a-panel).
+
+**Fix**: the comparison group excludes `YEAR` (`group_by(STATECD, INVYR, <user-requested groups>)`),
+so candidates are compared across hosting evaluations for a *fixed panel*; the boolean `keep`
+expression is written directly and vectorized rather than via a scalar-condition `ifelse()` (which
+would otherwise collapse the whole group's `keep` column to length 1); the "does a self-hosting eval
+exist" check uses `%in%` rather than `any(... == ...)`, since a small number of incomplete
+estimation-unit rows with `YEAR = NA` can appear in the input (an unrelated, pre-existing upstream
+join-completeness artifact, also confirmed directly against real RI data) and `==` against `NA`
+propagates through `any()`, silently nulling out `keep` for the whole group — this was a second,
+narrower bug caught during re-verification of the corrected version. The `mutate(YEAR = INVYR)`
+relabel (originally suspected to be the bug) is retained, since it's actually required: it's how a
+panel drawn from a non-self-hosting eval ends up correctly labeled with its own year rather than the
+hosting eval's year. The final `first()`-across-everything dedup is narrowed to `slice_head(n = 1)`,
+now used only to break genuine `nplts` ties between hosting evals rather than as the primary
+selection mechanism.
+
+**Verification**: `tpa(fiaRI, method = 'ANNUAL')` against the full unclipped RI toy dataset returns
+all 10 years (2009–2018) again — 2013–2018 numerically unchanged (natural, self-hosted panels), and
+2009–2012 now drawing from each panel's *optimal* (highest-plot-count) hosting eval rather than the
+original code's arbitrary first-encountered one. Against the full local RI validation extract
+(2003–2025, un-clipped), all 23 years are present with no gaps or duplicates, including years 2003
+and 2004, which have no self-hosting eval and were the case that surfaced the `NA`-propagation bug
+above. Full state validation set (RI/NC/CO/OR, `clipFIA(mostRecent = TRUE)`) still runs cleanly,
+returning exactly one row each, since clipping to a single evaluation leaves no candidate ambiguity.
+`biomass()`, `growMort()`, `vitalRates()`, and `standStruct()` spot-checked under `method = 'ANNUAL'`
+on the unclipped `fiaRI` dataset, each also restored to full coverage. `tests/testthat/test-util.R`
+rewritten to test the corrected semantics directly: a panel with no self-hosting eval choosing between
+two real hosting evals (matching RI's actual eval structure above), self-hosting-eval preference over
+a higher-`nplts` non-self-hosting one, estimation-unit-level aggregation feeding the hosting-eval
+comparison, an exact-`nplts` tiebreak, and the `NA`-hosting-candidate regression case.
+
 ## Notes
 
 ### API grouping (`rselected`/`cselected`) appears to be a no-op on `fullreport`
@@ -223,9 +319,91 @@ row/column variable selection as a web-form step, not a `fullreport` query param
 single-shot `fullreport` API used here. Worked around by cross-checking individual species via
 `wnum` instead (see "`bySpecies` grouping" above).
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()` in `R/util.R`, used by every `sumToEU()`-based estimator) does what
+its own math says it does, and `tpa()`'s output behaves sanely and consistently with the
+already-validated TI estimates wherever the documentation actually claims a relationship. See
+`tests/testthat/test-util.R` for the underlying unit-level checks on `maWeights()`/`filterAnnual()`
+themselves (shared by all 15 `sumToEU()`-based estimators, i.e. every estimator except `fsi()`,
+which reimplements this branching independently and needs separate treatment); this section covers
+only the `tpa()`-level checks built on top of them.
+
+### `maWeights()`/`filterAnnual()` unit-level findings (informing the checks below)
+
+Verified directly against the real `maWeights()`/`filterAnnual()` code (not just its documentation),
+using synthetic data shaped to match a real captured call from `tpa(fiaRI, method = 'ANNUAL')`:
+
+- SMA/LMA/EMA weights sum to 1 for every in-range `lambda`, as expected.
+- EMA(`lambda` → 1) monotonically approaches SMA's uniform weight; EMA(`lambda` → 0) concentrates
+  weight on the most recent panel — both only as **limits**, matching
+  `vignettes/alternativeEstimators.Rmd:28`.
+- At the *exact* boundaries, `lambda = 1` gave `NaN` weight for every panel, and `lambda = 0` gave
+  weight `0` for the oldest panel and `NaN` for every other panel — the opposite of a clean
+  "concentrates on the most recent panel" result. No `lambda` range check existed anywhere in the
+  package despite the documented `(0,1)` range. **Fixed** — see "Fixed" #4 below.
+- `filterAnnual()`'s `keep` filter was a no-op in the case that matters most (multiple candidate
+  panels competing to represent one "edge" reporting year with no natural `INVYR == YEAR` panel of
+  its own): every candidate survived the filter, and a subsequent `mutate(YEAR = INVYR)` relabeled
+  each surviving candidate under its own native INVYR rather than the edge year it was borrowed to
+  represent — so the edge year itself never appeared in the output, and the "pick the panel with the
+  most plots" behavior described in code comments didn't actually happen. This directly confirmed the
+  self-flagged TODO at `R/util.R:1210-1211` ("its not actually filtering things properly"). **Fixed**
+  — see "Fixed" #5 below.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI)**: `|EMA_TPA - SMA_TPA|` shrinks monotonically as lambda increases
+  (3.29 → 0.98 → 0.10 → 0.01 for lambda = 0.5/0.9/0.99/0.999) — **pass**, confirms the vignette's
+  documented limiting relationship at the `tpa()` output level, not just in the raw weights.
+- **TI vs. SMA bounded agreement, 4 states**: panel plot-count CV (`P2POINTCNT_INVYR` across INVYRs
+  within the most-recent evaluation, via `handlePops()`) was computed per state to classify
+  "balanced" vs. "imbalanced" panels, per the original plan:
+
+  | State | Panel-count CV | TI TPA | SMA TPA | Relative diff |
+  |---|---|---|---|---|
+  | RI | 0.61 | 347.46 | 356.67 | 2.65% |
+  | NC | 1.08 | 712.91 | 742.50 | 4.15% |
+  | CO | 0.66 | 481.20 | 471.98 | −1.92% |
+  | OR | 1.48 | 347.61 | 363.69 | 4.63% |
+
+  None of these four states have tightly balanced panels (CV ranges 0.6–1.5, no clean "balanced"
+  cluster near 0), yet TI and SMA landed within ~5% of each other in every case. Rather than build a
+  two-tier balanced/imbalanced tolerance as originally planned, a single flat 10% relative tolerance
+  is used for all four states — simpler, and empirically well-justified by this measurement. **Pass**
+  in all four states.
+- **Totals-vs-per-acre consistency under SMA/LMA/EMA/ANNUAL, 4 states**: `TREE_TOTAL / AREA_TOTAL ==
+  TPA` and `BA_TOTAL / AREA_TOTAL == BAA` to `1e-9` tolerance in all 16 state × method combinations —
+  **pass**. The totals/per-acre plumbing is not TI-specific.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 132 per-plot rows (not a
+  population-level estimate), confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this
+  combination — **pass**.
+- **Domain filter (`treeDomain = DIA >= 20`, `areaDomain` mesic) + `bySpecies` under each of
+  SMA/LMA/EMA/ANNUAL, 4 states**: no errors, no warnings, non-negative `TPA` in all 16 combinations —
+  **pass**. Re-runs the same historically-buggy filter/grpBy interaction from the TI validation (Test
+  15 above) under every non-TI method.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**.
+  Closes the gap that the v1.1.1 "error when setting `method = 'EMA'`" fix (`NEWS.md`) previously had
+  zero dedicated regression coverage anywhere in the package.
+
+## Findings (reported, not fixed — see bug-handling protocol)
+
+1. **Inconsistent `method`-argument validation across the package** (not specific to non-TI methods,
+   but surfaced while reviewing this code path): most `*Starter.R` files warn-and-silently-fall-back
+   to TI on an invalid `method` string (e.g. `tpaStarter.R:49-52`), `fsiStarter.R:42` hard-`stop()`s
+   instead, and `customPSE.R` has no check at all.
+2. **`vegStruct(method = 'SMA')` errors** (`replacement has length zero`) on the bundled `fiaRI`
+   toy dataset — found via a spot-check of the other 15 estimators' non-TI paths while verifying the
+   `maWeights()`/`filterAnnual()` fixes above didn't introduce regressions. Confirmed pre-existing
+   (reproduces identically on the pre-fix code) and unrelated to either fix in this report (`SMA`
+   touches neither the `EMA`-only `lambda` validation nor `filterAnnual()`, which only runs for
+   `method = 'ANNUAL'`). Out of scope for this report; deferred to the `vegStruct()` non-TI validation
+   pass (Phase 2 of the plan).
+
 ## Deferred to follow-up (not covered this pass)
 
-- `byPlot = TRUE` aggregation reproducing the population estimate (only totals-vs-per-acre was
-  checked).
-- `method` options other than `'TI'` (EVALIDator has no equivalent; these need
-  internal-consistency-only checks per the plan).
+- `byPlot = TRUE` aggregation reproducing the population estimate for the TI/default case (only
+  totals-vs-per-acre was checked for TI; non-TI + byPlot was checked structurally above but not for
+  numeric aggregation-reproduces-population-estimate).
+- Finding #2 above (`vegStruct(method = 'SMA')` error) — root cause not yet investigated.

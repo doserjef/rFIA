@@ -1112,6 +1112,15 @@ maWeights <- function(pops, method, lambda){
 
     #### ----- EXPONENTIAL MOVING AVERAGE
   } else if (stringr::str_to_upper(method) == 'EMA'){
+    ## lambda is documented as numeric (0,1) (see man/tpa.Rd and friends),
+    ## but nothing enforced that range: at the exact boundaries (0 or 1)
+    ## the weighting formula below is 0/0 (NaN) for most or all panels, and
+    ## outside the range it produces a negative weight or an inverted
+    ## recency ordering rather than a sensible weighted average.
+    if (anyNA(lambda) || any(lambda <= 0) || any(lambda >= 1)) {
+      stop("`lambda` must be numeric and strictly between 0 and 1 (received: ",
+           paste(lambda, collapse = ', '), ").", call. = FALSE)
+    }
     wgts <- pops %>%
       dplyr::distinct(YEAR, STATECD, INVYR, .keep_all = TRUE) %>%
       dplyr::arrange(YEAR, STATECD, INVYR) %>%
@@ -1207,9 +1216,18 @@ prettyNamesSF <- function (tOut, polys, byPlot, grpBy, grpByOrig, tNames, return
   return(tOut)
 }
 
-# TODO: need to update this, its not actually filtering things properly. It doesn't 
-#       result in selecting a bad annual panel, but it may not get the most optimal one. 
-# Choose annual panels to return
+# A single panel (INVYR) is often a constituent of more than one FIA
+# evaluation's multi-panel window -- e.g. RI's 2013 evaluation covers panels
+# 2009-2013, and its 2014 evaluation covers panels 2009-2014, so panel 2009
+# is "hosted" by both. For each panel, choose the single best hosting eval
+# to draw its standalone estimate from: the eval whose own nominal year
+# equals that panel's INVYR (a "self-hosting" eval, i.e. INVYR == YEAR) if
+# one exists, otherwise whichever hosting eval gives it the most plots. The
+# output is labeled with the panel's own INVYR (not the hosting eval's
+# year), since `method = 'ANNUAL'` reports one row per actual sampled
+# panel-year, not one row per evaluation. Estimation-unit-level estimates
+# are first aggregated up to the state level, since hosting evals compete
+# on a per-state (not per-estimation-unit) basis.
 filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
 
   # Have to handle statecd carefully in grp by
@@ -1220,27 +1238,47 @@ filterAnnual <- function(x, grpBy, pltsVar, ESTN_UNIT) {
       dplyr::select(-c(STATECD))
   }
   pltquo <- rlang::enquo(pltsVar)
+  otherGrp <- grpBy[!c(grpBy %in% 'STATECD')]
+  ## YEAR (the hosting eval's own nominal year) must NOT be part of the
+  ## comparison group below -- the whole point is to compare *across*
+  ## different hosting evals (different YEAR values) for the *same* panel.
+  panelGrp <- otherGrp[otherGrp != 'YEAR']
+
   x <- x %>%
     dplyr::left_join(dplyr::distinct(dplyr::select(ESTN_UNIT, CN, STATECD)), by = c('ESTN_UNIT_CN' = 'CN')) %>%
     dplyr::mutate(nplts = !!pltquo) %>%
-    # Grouped by STATECD, INVYR, and YEAR 
-    dplyr::group_by(STATECD, INVYR, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
-    dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE))) %>% 
-    ## Keep these
-    dplyr::group_by(STATECD, INVYR, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
-    dplyr::mutate(keep = ifelse(INVYR %in% YEAR,
-                                ifelse(YEAR == INVYR, 1, 0), ## When TRUE
-                                ifelse(nplts == max(nplts, na.rm = TRUE), 1, 0))) %>% ## When INVYR not in YEAR, keep estimates from the inventory where panel has the most plots
-    dplyr::ungroup() %>%
+    # Aggregate estimation-unit-level estimates up to the state level for
+    # each (STATECD, INVYR, hosting eval YEAR, ...) candidate.
+    dplyr::group_by(STATECD, INVYR, across(all_of(otherGrp))) %>%
+    dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE)), .groups = 'drop') %>%
+    # For each panel (STATECD, INVYR, ...), compare across its candidate
+    # hosting evals -- grouping by (STATECD, INVYR, YEAR, ...) here (i.e.
+    # including YEAR) would put each hosting eval in its own singleton
+    # group and make this comparison a no-op against itself.
+    dplyr::group_by(STATECD, INVYR, across(all_of(panelGrp))) %>%
+    ## `ifelse(any(INVYR == YEAR), ...)` would collapse the whole group's
+    ## `keep` column to length 1, since ifelse()'s output length follows
+    ## its (here scalar) *condition*, not its (here per-row) yes/no
+    ## branches -- so this is written as a directly vectorized boolean
+    ## expression instead: keep the self-hosting eval (INVYR == YEAR) when
+    ## one exists, otherwise the hosting eval(s) with the most plots. Uses
+    ## `%in%` rather than `==`/`any(...)` for the "does a self-hosting eval
+    ## exist" check specifically because it's NA-safe: a small number of
+    ## incomplete estimation-unit rows with YEAR = NA can appear in `x`
+    ## (an unrelated upstream join-completeness artifact), and `INVYR ==
+    ## NA` is NA rather than FALSE, which would otherwise propagate through
+    ## `any()` and silently null out `keep` for the entire group.
+    dplyr::mutate(keep = as.numeric(
+      (INVYR == YEAR) | (!(INVYR %in% YEAR) & nplts == max(nplts, na.rm = TRUE))
+    )) %>%
     dplyr::filter(keep == 1) %>%
-    # If there are multiple reporting years where a panel has the same number of plots
-    # then the estimate will be way too big, we fix this by taking the first row from each output group
-    # If the above worked it will have no effect. If the above failed, it will save our ass.
+    # Ties in `nplts` among multiple hosting evals for the same panel are
+    # broken by taking the first row per group (rare in practice).
+    dplyr::slice_head(n = 1) %>%
+    dplyr::ungroup() %>%
     dplyr::mutate(YEAR = INVYR) %>%
-    dplyr::group_by(STATECD, across(all_of(grpBy[!c(grpBy %in% 'STATECD')]))) %>%
-    dplyr::summarize(dplyr::across(.cols = dplyr::everything(), dplyr::first)) %>%
-    dplyr::ungroup()
-  
+    dplyr::select(-keep)
+
   return(x)
 }
 

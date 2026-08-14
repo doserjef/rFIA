@@ -274,6 +274,20 @@ Full details on this validation are provided in the development version of `rFIA
   FIA's design-based estimator and are excluded from EVALIDator's estimates for the same reason.
   Confirmed `treeType = 'dead'` still matches EVALIDator to full precision in OR, where this affects a
   large fraction of dead-tree records (issue #32).
++ Fixed a bug where `method = 'EMA'` silently accepted a `lambda` outside its documented `(0,1)` range
+  and returned degenerate weights instead of an error -- `NaN` for every panel at the exact boundaries
+  (`lambda = 0` or `1`), a negative weight for `lambda < 0`, or an inverted (oldest-weighted-highest)
+  recency ordering for `lambda > 1`. `lambda` is now validated up front with a clear error message.
+  This affected every estimation function (not just `tpa()`), since the underlying weighting logic is a
+  shared internal utility used by all of them, plus `fsi()` and `customPSE()`.
++ Fixed a bug where `method = 'ANNUAL'` did not correctly select the best FIA evaluation to draw a
+  panel's standalone estimate from, when that panel is a constituent of more than one evaluation's
+  multi-panel window (common: e.g. panel year 2009 is part of both a 2013 evaluation's 5-panel window
+  and a 2014 evaluation's window). The comparison across candidate evaluations was accidentally a
+  no-op, so which one's numbers ended up in the output was arbitrary (whichever came first
+  internally) rather than the one with the most plots, as intended. This affected every estimation
+  function using `method = 'ANNUAL'`, since the underlying selection logic is a shared internal
+  utility.
 
 ### `plotFIA()`
 
