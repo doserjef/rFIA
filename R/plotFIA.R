@@ -64,6 +64,10 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
            grpVar = !!grp_quo,
            yVar = !!y_quo)
 
+  # FIA data is sparse prior to min.year, so drop those years from animations
+  if (animate) {
+    data <- filter(data, YEAR >= min.year)
+  }
 
   # If they want a subset of the groups
   if (!is.null(n.max) & quo_name(grp_quo) != 'NULL'){
@@ -274,7 +278,7 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
     # If you want to animate
     if (animate){
       map <- map +
-        transition_manual(YEAR) +
+        gganimate::transition_manual(YEAR) +
         labs(title = 'Year: {current_frame}')
     }
   }
@@ -282,7 +286,7 @@ plotFIA <- function(data, y = NULL, grp = NULL, x = NULL, animate = FALSE, facet
   # Save the plots if they want to
   if(!is.null(savePath) & !is.null(fileName)){
     if (animate){
-      anim_save(filename = fileName, animation = map, path = savePath)
+      gganimate::anim_save(filename = fileName, animation = map, path = savePath)
     } else {
       # Save the plot with the chosen device
       ggsave(filename = fileName, plot = map, device = device, path = savePath)

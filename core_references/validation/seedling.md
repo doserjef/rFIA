@@ -176,12 +176,34 @@ exactly (regression test added, see below). Full package test suite re-run with 
   `1150115978290487` (the same plot used in fix #3) returns **two** rows for red maple, one per
   `CONDID`, both reporting the *full* plot-level total (`TPA = 2848.681`, the all-species pooled
   total for that plot) rather than splitting it by condition -- i.e. the same value is double-counted
-  across the two `CONDID` rows. This would corrupt any downstream `customPSE()` calculation that
-  treats each row as an independent observation. `seedling(byPlot = TRUE)` does **not** have this
-  problem -- its condition list is pre-aggregated to one row per plot before the join, so there's no
-  many-to-many join to trigger it (confirmed: `byPlot = TRUE`'s value for the same plot/species
-  correctly reflects the summed total, see fix #3's verification). Needs explicit sign-off before
-  changing, given it touches the `treeList`/`customPSE()` contract and may be shared architecture.
+  across the two `CONDID` rows. `seedling(byPlot = TRUE)` does **not** have this problem -- its
+  condition list is pre-aggregated to one row per plot before the join, so there's no many-to-many
+  join to trigger it (confirmed: `byPlot = TRUE`'s value for the same plot/species correctly reflects
+  the summed total, see fix #3's verification). Needs explicit sign-off before changing, given it
+  touches the `treeList`/`customPSE()` contract and may be shared architecture.
+
+  **Follow-up check: does this actually corrupt `customPSE()` output?** Tested directly by feeding
+  `seedling(treeList = TRUE)` into `customPSE()` (numerator `xVars = TPA`, denominator
+  `yVars = PROP_FOREST`, mirroring the exact pattern `test-customPSE.R` already uses for `tpa()`) and
+  comparing against `seedling()`'s own population-level `TPA`, across all four validation states, both
+  `landType`s, and a full `bySpecies = TRUE` breakdown (including red maple/SPCD 316 on the NC plot
+  above). **Result: exact match (diff = 0) in every case**, including `nPlots_x`/`nPlots_y` vs.
+  `nPlots_TREE`/`nPlots_AREA`. The duplicate-row bug turns out to be silently absorbed rather than
+  propagated: `customPSE()` keys tree-basis data by `SUBP`/`TREE` (both hard-set to `NA` for
+  seedlings, per the `mutate()` two blocks above this one) and does not use `CONDID` to distinguish
+  rows unless the caller explicitly adds it via `xGrpBy`/`yGrpBy`. Since the duplicated `CONDID` rows
+  carry byte-identical `TPA` (and no other retained column differs), `customPSE()`'s internal
+  `dplyr::distinct()` collapses them back into one row before summing to the plot level -- so the
+  standard, documented numerator/denominator workflow is safe today.
+
+  **This is conditional, not a green light to ignore the bug.** If a caller explicitly retains
+  `CONDID` (e.g. `xGrpBy = c(SPCD, CONDID)`, which is a reasonable thing to want for condition-level
+  detail), the bug is fully exposed: on the same NC plot, red maple's true total is 136.5 TPA/acre,
+  but grouping by `(SPCD, CONDID)` returns 4 phantom per-condition rows summing to 2204.3 TPA/acre
+  (~16x inflation). The raw `treeList = TRUE` output is also just wrong on its face for any consumer
+  that doesn't route through `customPSE()`'s dedup-by-`(SUBP, TREE)` behavior. Still needs the proper
+  join fix; downgraded here from "may corrupt `customPSE()` calculations" to "safe for the standard
+  `customPSE()` pattern, unsafe if `CONDID` is added to `xGrpBy`/`yGrpBy`."
 - `method` options other than `'TI'` (no EVALIDator equivalent; internal-consistency-only checks per
   the plan, not yet added).
 - `byPlot = TRUE` aggregating to reproduce the population-level estimate exactly (only the specific
