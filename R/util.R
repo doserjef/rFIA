@@ -1459,7 +1459,6 @@ structHelper <- function(dia, crownClass){
 }
 
 
-# TODO:
 # Prop basis helper
 adjHelper <- function(DIA, MACRO_BREAKPOINT_DIA, ADJ_FACTOR_MICR, ADJ_FACTOR_SUBP, ADJ_FACTOR_MACR){
   # IF it doesnt exist make it massive
@@ -1475,7 +1474,6 @@ adjHelper <- function(DIA, MACRO_BREAKPOINT_DIA, ADJ_FACTOR_MICR, ADJ_FACTOR_SUB
 
 }
 
-# TODO: 
 # GRM adjustment helper
 grmAdj <- function(subtyp, adjMicr, adjSubp, adjMacr) {
 
@@ -1492,7 +1490,6 @@ grmAdj <- function(subtyp, adjMicr, adjSubp, adjMacr) {
   return(data$adj)
 }
 
-# TODO: 
 # Helper function to compute variance for estimation units (manages different estimation methods)
 unitVarDT <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, stratMean1 = NULL){
   unitM <- unitMean(ESTN_METHOD, a, nh, w, stratMean)
@@ -1512,7 +1509,6 @@ unitVarDT <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, stratMean1 = 
   }
 }
 
-# TODO: 
 unitVar <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, unitM, stratMean1 = NULL, unitM1 = NULL){
   if(method == 'var'){
     uv = ifelse(dplyr::first(ESTN_METHOD) == 'strat',
@@ -1529,7 +1525,6 @@ unitVar <- function(method, ESTN_METHOD, a, nh, w, v, stratMean, unitM, stratMea
   }
 }
 
-# TODO: 
 unitVarNew <- function(method, ESTN_METHOD, a, nh, n, w, v, stratMean, unitM, stratMean1 = NULL, unitM1 = NULL){
   if(method == 'var'){
     uv = ifelse(dplyr::first(ESTN_METHOD) == 'strat',
@@ -1556,7 +1551,6 @@ rVar <- function(x, y, xVar, yVar, xyCov){
   return(rv)
 }
 
-# TODO: 
 # Helper function to compute variance for estimation units (manages different estimation methods)
 unitMean <- function(ESTN_METHOD, a, nh, w, stratMean){
   um = ifelse(dplyr::first(ESTN_METHOD) == 'strat',
@@ -1582,7 +1576,6 @@ vrAttHelper <- function(attribute, attribute.prev, attribute.mid, attribute.beg,
   return(at)
 }
 
-# TODO: 
 ratioVar <- function(x, y, x.var, y.var, cv) {
   r.var <- (1 / (y^2)) * (x.var + ((x/y)^2 * y.var) - (2 * (x/y) * cv) )
   # Sometimes rounding errors in covariance estimate cause slightly negative
