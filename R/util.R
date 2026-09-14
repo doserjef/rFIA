@@ -1171,11 +1171,20 @@ maWeights <- function(pops, method, lambda){
 # Combine most-recent population estimates across states with potentially
 # different reporting schedules, e.g., if 2016 is most recent in MI and 2017 is
 # most recent in WI, combine them and label as 2017
-combineMR <- function(x){
+combineMR <- function(x, method){
   # A domain that matches no plots produces a 0-row x. max(YEAR, na.rm = TRUE)
   # on an empty vector has no sensible answer, so skip the relabeling rather
   # than let it emit a "no non-missing arguments to max" warning.
   if (nrow(x) == 0) return(x)
+
+  # method = 'ANNUAL' legitimately returns multiple distinct-YEAR rows per
+  # state (one per sampled panel-year, via filterAnnual()). Relabeling them
+  # all to a single YEAR here would silently pool them together in the
+  # downstream group_by(YEAR, ...) %>% summarize(sum(...)) step. combineMR()
+  # exists to reconcile *different states'* differing "most recent" YEARs
+  # under TI/SMA/LMA/EMA (which already collapse to one row per state before
+  # reaching here), not to touch ANNUAL's genuinely multi-row output.
+  if (stringr::str_to_upper(method) == 'ANNUAL') return(x)
 
   out <- x %>%
     dplyr::ungroup() %>%

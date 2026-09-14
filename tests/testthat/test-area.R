@@ -296,3 +296,151 @@ test_that("area() matches EVALIDator for landType = 'non-forest' + areaDomain (R
   expect_equal(out$AREA_TOTAL, ref$estimate, tolerance = 1e-6)
   expect_equal(out$nPlots_AREA_NUM, ref$plotCount)
 })
+
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, area()'s own internal identities hold regardless of
+# method, and the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md for the full writeup of why).
+# See tests/testthat/test-util.R for the underlying maWeights()/
+# filterAnnual()/combineMR() unit-level checks these per-function tests
+# build on, and tpa.md "Fixed" #6 for a package-wide combineMR()/ANNUAL bug
+# found and fixed during this pass (also affected tpa(), not just area()).
+
+# Test 16 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI). Never exactly
+# equal -- lambda never literally reaches 1 in a real call (see
+# test-util.R for why the exact boundary is degenerate) -- so this checks
+# the trend, not a fixed-tolerance snapshot. Mirrors tpa.md's Test 16.
+test_that("area() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(area(db_ri, landType = 'forest', method = 'SMA', totals = TRUE))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(area(db_ri, landType = 'forest', method = 'EMA', lambda = lam, totals = TRUE))
+    abs(ema$AREA_TOTAL - sma$AREA_TOTAL)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 100)
+})
+
+# Test 17 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general -- TI
+# implicitly weights each panel by its plot count, SMA weights every panel
+# equally regardless of size. Reusing the same flat 10% relative tolerance
+# established empirically in tpa.md (panel plot-count CV is a property of
+# each state's panel structure, not of the estimator, so it applies
+# unchanged here): RI/NC/CO/OR landed within ~5% of each other for
+# AREA_TOTAL too (-0.65%/0.76%/-2.15%/-4.98%), well inside the 10% bound.
+for (st in states) {
+  test_that(paste("area() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(area(dbs[[st]], landType = 'forest', method = 'TI', totals = TRUE))
+    sma <- as.data.frame(area(dbs[[st]], landType = 'forest', method = 'SMA', totals = TRUE))
+    expect_equal(sma$AREA_TOTAL, ti$AREA_TOTAL, tolerance = 0.10)
+  })
+}
+
+# Test 18 ------------------------------
+# area()'s own internal identities (Test 10 above, TI-only) re-checked under
+# every non-TI method: PERC_AREA sums to 100% across FORTYPCD groups, and
+# byLandType = TRUE sums to landType = 'all' -- both checked *per YEAR*
+# rather than pooled across years, since method = 'ANNUAL' returns one row
+# per sampled panel-year (unlike SMA/LMA/EMA, which return a single row).
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("area() PERC_AREA sums to 100% across FORTYPCD groups under method =", m, "(", st, ")"), {
+      out <- as.data.frame(area(dbs[[st]], landType = 'forest', grpBy = FORTYPCD, method = m, totals = TRUE))
+      byYear <- aggregate(PERC_AREA ~ YEAR, data = out, sum)
+      expect_equal(byYear$PERC_AREA, rep(100, nrow(byYear)), tolerance = 1e-6)
+    })
+
+    test_that(paste("area() byLandType sums to landType = 'all' under method =", m, "(", st, ")"), {
+      out <- as.data.frame(area(dbs[[st]], byLandType = TRUE, method = m, totals = TRUE))
+      all_ <- as.data.frame(area(dbs[[st]], landType = 'all', method = m, totals = TRUE))
+      byYear <- aggregate(AREA_TOTAL ~ YEAR, data = out, sum)
+      merged <- merge(byYear, all_[, c("YEAR", "AREA_TOTAL")], by = "YEAR", suffixes = c("_byLT", "_all"))
+      expect_equal(nrow(merged), nrow(byYear)) # every year matched, none dropped
+      expect_equal(merged$AREA_TOTAL_byLT, merged$AREA_TOTAL_all, tolerance = 1e-4)
+    })
+  }
+}
+
+# Test 19 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error. Mirrors tpa.md's Test 19.
+test_that("area() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(area(db_ri, landType = 'forest', method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'PROP_FOREST') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 20 ------------------------------
+# treeDomain + grpBy interaction (the historical v1.1.1 area()/areaChange()
+# bug pattern already checked for TI in Test 9 above) re-run under every
+# non-TI method: the filter must still restrict area, and grpBy must not
+# silently drop it for any group -- checked *per YEAR*, since ANNUAL returns
+# multiple year-rows.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("area() treeDomain survives grpBy under method =", m, "(", st, ")"), {
+      db_st <- dbs[[st]]
+      expect_no_warning({
+        base <- as.data.frame(area(db_st, landType = 'forest', totals = TRUE, method = m))
+        filtered <- as.data.frame(area(db_st, landType = 'forest', treeDomain = DIA > 20, totals = TRUE, method = m))
+        grouped <- as.data.frame(area(db_st, landType = 'forest', treeDomain = DIA > 20,
+                                      grpBy = OWNGRPCD, totals = TRUE, method = m))
+      })
+      mergedBase <- merge(filtered[, c("YEAR", "AREA_TOTAL")], base[, c("YEAR", "AREA_TOTAL")],
+                          by = "YEAR", suffixes = c("_filt", "_base"))
+      expect_true(all(mergedBase$AREA_TOTAL_filt < mergedBase$AREA_TOTAL_base))
+
+      byYearGrouped <- aggregate(AREA_TOTAL ~ YEAR, data = grouped, sum)
+      mergedGrouped <- merge(byYearGrouped, filtered[, c("YEAR", "AREA_TOTAL")],
+                             by = "YEAR", suffixes = c("_grp", "_filt"))
+      expect_equal(nrow(mergedGrouped), nrow(byYearGrouped))
+      expect_equal(mergedGrouped$AREA_TOTAL_grp, mergedGrouped$AREA_TOTAL_filt, tolerance = 1e-4)
+    })
+  }
+}
+
+# Test 21 ------------------------------
+# Plain default-args EMA smoke test, one per state -- regression coverage
+# for the v1.1.1 "error when setting method = 'EMA'" bug (NEWS.md), which
+# previously had zero dedicated regression tests anywhere in the package.
+# Mirrors tpa.md's Test 21.
+for (st in states) {
+  test_that(paste("area() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(area(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+}
+
+# Test 22 ------------------------------
+# Regression test for the combineMR()/ANNUAL pooling bug found during this
+# pass (see area.md "Fixed" and tpa.md "Fixed" #6): on a
+# clipFIA(mostRecent = TRUE) db, method = 'ANNUAL' previously relabeled
+# every constituent panel to the same YEAR and summed them into one badly
+# inflated row (RI: AREA_TOTAL = 2,638,587 vs. the true 2025 value of
+# 427,243) instead of returning one row per real sampled panel. RI only
+# (this exact repro is what surfaced the bug; full 4-state coverage of
+# ANNUAL's shape is already exercised in Tests 18/20 above).
+for (st in states) {
+  test_that(paste("area() runs with method = 'ANNUAL' and default arguments, one row per panel (", st, ")"), {
+    expect_no_error(out <- as.data.frame(area(dbs[[st]], method = 'ANNUAL')))
+    expect_s3_class(out, "data.frame")
+    expect_gt(nrow(out), 1) # not pooled into a single mislabeled row
+  })
+}
+
+test_that("area() method = 'ANNUAL' on a clipFIA(mostRecent = TRUE) db matches the unclipped history (RI)", {
+  ann_clipped <- as.data.frame(area(db_ri, landType = 'forest', totals = TRUE, method = 'ANNUAL'))
+  fiaRI_full <- readFIA(validation_data_dir, states = "RI")
+  ann_full <- as.data.frame(area(fiaRI_full, landType = 'forest', totals = TRUE, method = 'ANNUAL'))
+
+  latest <- ann_clipped[which.max(ann_clipped$YEAR), ]
+  fullMatch <- ann_full[ann_full$YEAR == latest$YEAR, ]
+  expect_equal(latest$AREA_TOTAL, fullMatch$AREA_TOTAL, tolerance = 1e-6)
+  expect_equal(latest$nPlots_AREA_NUM, fullMatch$nPlots_AREA_NUM)
+})

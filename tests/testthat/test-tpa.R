@@ -431,3 +431,25 @@ for (st in states) {
   })
 }
 
+# Test 22 ------------------------------
+# Regression test for the combineMR()/ANNUAL pooling bug (see tpa.md, "Fixed"
+# #6, correcting the original claim made in "Fixed" #5's verification). On a
+# clipFIA(mostRecent = TRUE) db, method = 'ANNUAL' previously relabeled every
+# constituent panel to the same YEAR and summed them into one badly inflated
+# row instead of returning one row per real sampled panel. RI only (matches
+# the plan's "run once or twice, not per function" guidance for this
+# already-shared-code check, and this exact repro is what surfaced the bug).
+test_that("tpa() method = 'ANNUAL' on a clipFIA(mostRecent = TRUE) db returns one row per real panel, matching the unclipped history (RI)", {
+  ann_clipped <- as.data.frame(tpa(db_ri, treeType = 'live', landType = 'forest', method = 'ANNUAL'))
+  # Not pooled into a single mislabeled row.
+  expect_gt(nrow(ann_clipped), 1)
+
+  fiaRI_full <- readFIA(validation_data_dir, states = "RI")
+  ann_full <- as.data.frame(tpa(fiaRI_full, treeType = 'live', landType = 'forest', method = 'ANNUAL'))
+
+  latest <- ann_clipped[which.max(ann_clipped$YEAR), ]
+  fullMatch <- ann_full[ann_full$YEAR == latest$YEAR, ]
+  expect_equal(latest$TPA, fullMatch$TPA, tolerance = 1e-6)
+  expect_equal(latest$nPlots_TREE, fullMatch$nPlots_TREE)
+})
+

@@ -483,7 +483,7 @@ If not already installed, you can install JAGS from SourceForge:
     # different reporting schedules, i.e., if 2016 is most recent in MI and 2017 is
     # most recent in WI, combine them and label as 2017
     if (mr) {
-      tEst <- combineMR(tEst)
+      tEst <- combineMR(tEst, method)
     }
     
     ## Totals and ratios -------------------------------------------------------

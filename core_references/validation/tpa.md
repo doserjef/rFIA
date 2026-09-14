@@ -294,14 +294,87 @@ all 10 years (2009–2018) again — 2013–2018 numerically unchanged (natural,
 original code's arbitrary first-encountered one. Against the full local RI validation extract
 (2003–2025, un-clipped), all 23 years are present with no gaps or duplicates, including years 2003
 and 2004, which have no self-hosting eval and were the case that surfaced the `NA`-propagation bug
-above. Full state validation set (RI/NC/CO/OR, `clipFIA(mostRecent = TRUE)`) still runs cleanly,
-returning exactly one row each, since clipping to a single evaluation leaves no candidate ambiguity.
-`biomass()`, `growMort()`, `vitalRates()`, and `standStruct()` spot-checked under `method = 'ANNUAL'`
+above.
+
+**Correction (added during `area()`'s later non-TI pass, see "Fixed" #6 below)**: this section
+originally claimed that the full state validation set (RI/NC/CO/OR, `clipFIA(mostRecent = TRUE)`)
+"still runs cleanly, returning exactly one row each, since clipping to a single evaluation leaves no
+candidate ambiguity." That was true about the row *count* but wrong about what the row actually
+contained, and masked a real, separate bug: on a `clipFIA(mostRecent = TRUE)`-clipped input,
+`filterAnnual()` itself was (and still is) working correctly — it was independently confirmed to still
+produce one row per real constituent panel (e.g. 7 rows for RI: 2019–2025) — but a *different* shared
+utility, `combineMR()`, was then unconditionally relabeling every one of those rows to the same YEAR
+and a subsequent aggregation step summed them back into the single row this section observed. That row
+was not "no ambiguity" — it was 7 panels' worth of `TPA`/`BAA`/`nPlots_TREE` pooled together and
+mislabeled as one year. This went undetected in this report because every check exercising
+`method = 'ANNUAL'` on the 4-state clipped harness was either a self-consistent ratio check (which
+holds regardless of whether the underlying totals are correct) or didn't include `ANNUAL` at all. See
+"Fixed" #6 for the root cause, fix, and corrected values. `biomass()`, `growMort()`, `vitalRates()`, and
+`standStruct()` spot-checked under `method = 'ANNUAL'`
 on the unclipped `fiaRI` dataset, each also restored to full coverage. `tests/testthat/test-util.R`
 rewritten to test the corrected semantics directly: a panel with no self-hosting eval choosing between
 two real hosting evals (matching RI's actual eval structure above), self-hosting-eval preference over
 a higher-`nplts` non-self-hosting one, estimation-unit-level aggregation feeding the hosting-eval
 comparison, an exact-`nplts` tiebreak, and the `NA`-hosting-candidate regression case.
+
+### 6. `combineMR()` pooled every panel into a single mislabeled row under `method = 'ANNUAL'` on a `clipFIA(mostRecent = TRUE)` input [FIXED]
+
+Found during `area()`'s later non-TI pass, not this original `tpa()` pass — recorded here because it
+invalidates a claim made in "Fixed" #5 above (see the correction inserted there). `combineMR()`
+(`R/util.R`) is a shared utility whose real purpose, per its own comment, is to reconcile *different
+states'* differing "most recent" reporting years under `'TI'`/`'SMA'`/`'LMA'`/`'EMA'` (e.g. if 2016 is
+most recent in MI and 2017 is most recent in WI, relabel both to 2017 so they combine into one row).
+Every one of ~16 estimator dispatcher files calls it unconditionally whenever the input db is flagged
+`mostRecent` (`mr = TRUE`), with no `method` check: `if (mr) { tEst <- combineMR(tEst); aEst <-
+combineMR(aEst) }`.
+
+For `'TI'`/`'SMA'`/`'LMA'`/`'EMA'`, this is a genuine no-op in practice — confirmed directly via
+`trace()` that every row reaching `combineMR()` under those methods already shares one identical `YEAR`
+value, since `sumToEU()`'s own weighted-average branches for those methods already collapse to one row
+per state (or one row per `lambda`, for EMA ribbons) before `combineMR()` ever sees them. But
+`method = 'ANNUAL'` legitimately hands `combineMR()` multiple *different*-YEAR rows for a single state
+(one per real sampled panel, correctly produced by `filterAnnual()`, per "Fixed" #5 above) — and
+`combineMR()`'s `mutate(YEAR = max(YEAR, na.rm = TRUE))` relabeled all of them to the same year
+regardless, so the dispatcher's next step, `group_by(YEAR, ...) %>% summarize(sum(...))`, silently
+summed every panel's `TPA`/`BAA`/`nPlots_TREE` (or, for `area()`, `AREA_TOTAL`/`nPlots_AREA`) together
+into one badly inflated, mislabeled row.
+
+Confirmed empirically on RI (before fix): `tpa(clipFIA(fiaRI, mostRecent = TRUE), method = 'ANNUAL')`
+returned `TPA = 356.67`, `nPlots_TREE = 129` for a row labeled `YEAR = 2025` — not the true 2025-panel
+estimate (`TPA = 347.42`, `nPlots_TREE = 20`, confirmed by running `method = 'ANNUAL'` on the full
+unclipped RI history and reading off the 2025 row), but a pool of all 7 constituent panels
+(2019–2025). This is far more obvious for `area()`, whose `AREA_TOTAL` is a raw total rather than a
+ratio: the same bug returned `AREA_TOTAL = 2,638,587` for RI (vs. the true 2025 value of `427,243`, a
+~6x inflation) with `nPlots_AREA_NUM = 132` (the full clipped state's plot count, not the ~21 plots in
+the 2025 panel alone). For `tpa()`'s ratio-based output, pooling numerator and denominator together
+still produces a number that looks like a plausible density (close to, though not the same as, this
+report's own SMA value), which is why this report's existing `ANNUAL` checks — all either ratio-based
+consistency checks or the "one row returned" structural check misread in "Fixed" #5 — never caught it.
+
+**Root cause**: `combineMR()` (`R/util.R`) had no `method` awareness at all, so it applied its
+YEAR-relabeling unconditionally regardless of whether the input legitimately contained multiple
+distinct-year rows.
+
+**Fix**: `combineMR()` now takes `method` as a second argument and returns its input unchanged when
+`stringr::str_to_upper(method) == 'ANNUAL'`, before doing any relabeling. All ~16 call sites (one per
+estimator dispatcher: `area()`, `areaChange()`, `biomass()`, `carbon()`, `customPSE()`, `diversity()`,
+`dwm()`, `fsi()`, `growMort()`, `invasive()`, `seedling()`, `standStruct()`, `tpa()`, `vegStruct()`,
+`vitalRates()`, `volume()`) were updated to pass `method` through, since it is already an in-scope
+top-level argument at every call site.
+
+**Verification**: after the fix, `tpa(clipFIA(fiaRI, mostRecent = TRUE), method = 'ANNUAL')` and
+`area(clipFIA(fiaRI, mostRecent = TRUE), method = 'ANNUAL')` both return one row per real constituent
+panel (7 rows for RI: 2019–2025; 8/10/11 rows for NC/CO/OR respectively, matching each state's own
+evaluation window) instead of one pooled row, and each state's 2025 row now matches, to full precision,
+the corresponding year's estimate computed independently from that state's full unclipped inventory
+history (RI: `TPA = 347.42`/`nPlots_TREE = 20` for `tpa()`, `AREA_TOTAL = 427,243`/`nPlots_AREA = 21`
+for `area()` — both exact matches). `'TI'`/`'SMA'`/`'LMA'`/`'EMA'` output (both functions, all four
+states) confirmed byte-identical before and after the fix, consistent with the no-op analysis above.
+Full package test suite re-run: `tests/testthat/test-util.R` (58/58 pass) and the non-EVALIDator
+portions of `test-tpa.R`/`test-area.R` show no regressions — the only failures present are small,
+pre-existing numeric drift in the live EVALIDator-comparison tests for CO/OR (`method = 'TI'` only,
+unrelated to this fix, consistent with the upstream FIA database having been updated since this report
+and `area.md` were last authored).
 
 ## Notes
 

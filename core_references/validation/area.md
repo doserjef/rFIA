@@ -285,6 +285,78 @@ See Methodology above — confirmed by direct API test (`fetch_evalidator(snum =
 = 129")` byte-identical to the same call without `wnum`). Relevant for anyone extending this
 validation to `areaChange()`, which shares the same `treeDomain` mechanism.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `area()`'s output behaves sanely and consistently
+with the already-validated TI estimates wherever the documentation actually claims a relationship. See
+`tests/testthat/test-util.R` for the underlying unit-level checks on this shared machinery, and
+`tpa.md` (the template this section follows) for the full non-TI methodology and the two invariants
+that must not be over-asserted (EMA→SMA/EMA→ANNUAL only hold as *limits*; TI and SMA are not claimed
+numerically equal in general).
+
+### A real bug found and fixed during this pass: `combineMR()`/`method = 'ANNUAL'`
+
+While extending `tpa.md`'s non-TI template to `area()`, `method = 'ANNUAL'` on this report's own
+4-state `clipFIA(mostRecent = TRUE)` harness surfaced a real, package-wide bug — not specific to
+`area()`, but far more visible here than it was for `tpa()`, because `area()`'s `AREA_TOTAL` is a raw
+total rather than a ratio. Full root cause, fix, and verification are written up in `tpa.md`, "Fixed"
+#6 (which also corrects an incorrect claim made in `tpa.md`'s own original "Fixed" #5); summary as it
+affects `area()` specifically:
+
+`area(clipFIA(fiaRI, mostRecent = TRUE), method = 'ANNUAL')` previously returned a single row labeled
+`YEAR = 2025` with `AREA_TOTAL = 2,638,587` and `nPlots_AREA_NUM = 132` — not a real estimate of any
+single year, but all 7 of RI's constituent panels (2019–2025) silently summed together and mislabeled
+as one year, caused by the shared `combineMR()` utility relabeling every panel's row to the same YEAR
+before a later aggregation step summed them. After the fix (`combineMR()` now skips its YEAR-relabeling
+for `method = 'ANNUAL'`), the same call returns 7 separate rows, one per real sampled panel, and the
+2025 row (`AREA_TOTAL = 427,243`, `nPlots_AREA_NUM = 21`) matches, to full precision, the value obtained
+by running `method = 'ANNUAL'` against the full unclipped RI inventory history. `'TI'`/`'SMA'`/`'LMA'`/
+`'EMA'` output is confirmed byte-identical before and after the fix (see `tpa.md` for the no-op
+analysis). Regression tests added to `tests/testthat/test-util.R` (unit-level, on `combineMR()`
+directly) and `tests/testthat/test-area.R` (Test 22).
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI)**: `|EMA_AREA_TOTAL - SMA_AREA_TOTAL|` shrinks monotonically as lambda
+  increases (21239 → 2587 → 213 → 21 for lambda = 0.5/0.9/0.99/0.999) — **pass**, confirms the same
+  limiting relationship already established in `tpa.md` holds at the `area()` output level too.
+- **TI vs. SMA bounded agreement, 4 states**: reusing the flat 10% relative tolerance established
+  empirically in `tpa.md` (panel plot-count CV is a property of each state's panel structure, not the
+  estimator, so it applies unchanged here) rather than recomputing it:
+
+  | State | TI AREA_TOTAL | SMA AREA_TOTAL | Relative diff |
+  |---|---|---|---|
+  | RI | 379412.6 | 376941.0 | −0.65% |
+  | NC | 18509817.1 | 18650929.0 | 0.76% |
+  | CO | 22718076.4 | 22229644.0 | −2.15% |
+  | OR | 29754800.9 | 28272088.3 | −4.98% |
+
+  All four states land well within the 10% bound (and in fact within ~5%, consistent with `tpa.md`'s
+  own measurements for the same states) — **pass** in all four.
+- **`area()`'s own internal identities under SMA/LMA/EMA/ANNUAL, 4 states** (the `area()`-specific
+  analog of `tpa.md`'s totals-vs-per-acre check, re-running Test 10's TI-only checks under every
+  non-TI method): `PERC_AREA` sums to exactly 100% across `FORTYPCD` groups, and `byLandType = TRUE`
+  sums to `landType = 'all'` — both checked *per YEAR* rather than pooled across years, since
+  `method = 'ANNUAL'` returns one row per sampled panel-year (7/8/10/11 rows for RI/NC/CO/OR
+  respectively) while SMA/LMA/EMA return a single row. **Pass** in all 16 state × method combinations
+  for both checks.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 240 per-plot/per-year rows (not
+  a population-level estimate) with the documented `PROP_FOREST` column present, confirming
+  `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this combination for `area()` either —
+  **pass**.
+- **`treeDomain` + `grpBy` interaction (the v1.1.1 bug pattern from Test 9 above) under each of
+  SMA/LMA/EMA/ANNUAL, 4 states**: the filter still restricts area (`filtered < base` for every year),
+  and `grpBy = OWNGRPCD` does not silently drop it for any group (summing across groups reproduces the
+  filtered total, checked per year) — **pass** in all 16 state × method combinations.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`.
+- **`method = 'ANNUAL'` with default arguments, 4 states**: runs without error and returns one row per
+  real panel (not pooled) in all four — **pass**. This is new regression coverage specifically for the
+  bug found and fixed during this pass (above); RI's clipped result is additionally confirmed to match
+  the unclipped-history value for its most recent year to full precision.
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population-level estimate (only a structural sanity

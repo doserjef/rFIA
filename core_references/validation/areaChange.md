@@ -164,19 +164,94 @@ This fix lives entirely in `R/areaChangeStarter.R` (the new `COND_STATUS_CD1`/`C
 columns and the exclusion filter), not in the shared `R/util.R` utilities also used by `area()`. The
 already-validated `area()` behavior (`area.md`) is untouched by this change.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `areaChange()`'s output behaves sanely and
+consistently with the already-validated TI estimates wherever the documentation actually claims a
+relationship. See `tests/testthat/test-util.R` for the underlying unit-level checks on this shared
+machinery, and `tpa.md` (the template this section follows) for the full non-TI methodology, the two
+invariants that must not be over-asserted, and `tpa.md`'s "Fixed" #6 for a package-wide
+`combineMR()`/`ANNUAL` bug found and fixed during `area()`'s non-TI pass — confirmed below to have
+affected `areaChange()` too (it shares the same `combineMR()` call in `R/areaChange.R`), but already
+fixed at the shared-utility level before this section was written, so no new bug was found here.
+
+`PREV_AREA` (a plain, nonnegative area total, the same role `AREA_TOTAL` plays for `area()`) is used
+for the EMA/SMA convergence and TI-vs-SMA bounded-agreement checks below, not the signed `AREA_CHNG`:
+confirmed empirically that `AREA_CHNG` is driven by a small subpopulation of transitioning plots and
+can differ substantially in relative terms between methods even when `PREV_AREA` agrees closely (RI:
+TI vs. SMA `AREA_CHNG` differ by ~49% relatively — `538.9` vs. `801.6` — vs. ~6.5% for `PREV_AREA`), so
+a relative-tolerance bound on `AREA_CHNG` itself is not meaningful. This is consistent with this
+report's own pre-existing deferral (below) of a numeric `treeDomain` effect check on `AREA_CHNG` for
+the same reason.
+
+### A real bug found during `area()`'s pass, confirmed to affect `areaChange()` too (already fixed)
+
+`method = 'ANNUAL'` on this report's 4-state `clipFIA(mostRecent = TRUE)` harness was, before the fix
+described in `tpa.md` "Fixed" #6, affected by the same `combineMR()` bug found while validating
+`area()`: every constituent panel's estimate was silently pooled into a single mislabeled row instead
+of one row per real sampled panel. `R/areaChange.R` calls `combineMR()` at the same unconditional
+`if (mr) { tEst <- combineMR(tEst); aEst <- combineMR(aEst) }` site as every other estimator dispatcher
+(not independently verified with a full before/after repro the way `area()`/`tpa()` were, since the fix
+was already applied package-wide by the time this section was written — instead verified directly that
+the *fixed* behavior is correct, below). No `areaChange()`-specific fix was needed.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI), `PREV_AREA`**: `|EMA_PREV_AREA - SMA_PREV_AREA|` shrinks
+  monotonically as lambda increases (14228 → 1732 → 150 → 15 for lambda = 0.5/0.9/0.99/0.999) —
+  **pass**, confirms the same limiting relationship already established in `tpa.md`/`area.md` holds at
+  the `areaChange()` output level too.
+- **TI vs. SMA bounded agreement, 4 states, `PREV_AREA`**: reusing the flat 10% relative tolerance
+  established empirically in `tpa.md` (a property of each state's panel structure, not the estimator):
+
+  | State | TI PREV_AREA | SMA PREV_AREA | Relative diff |
+  |---|---|---|---|
+  | RI | 376692.8 | 352238.0 | −6.49% |
+  | NC | 18720574.6 | 18929685.6 | 1.12% |
+  | CO | 22449461.8 | 22062854.3 | −1.72% |
+  | OR | 29640989.1 | 28943907.8 | −2.35% |
+
+  All four states land within the 10% bound — **pass** in all four.
+- **Internal identity net `AREA_CHNG` = reversion − diversion, under SMA/LMA/EMA/ANNUAL, 4 states ×
+  2 landTypes**: re-running this report's central identity (see "Results" above, TI-only) under every
+  non-TI method, checked *per YEAR* for `ANNUAL`. A year's diversion or reversion category can be
+  legitimately absent from the `component` breakdown (zero qualifying plots that year — confirmed on
+  RI, where several individual annual panels have, e.g., a diversion event but no reversion event
+  that year, or vice versa) and is treated as `AREA_CHNG = 0` for that category rather than requiring
+  both rows to be present. **Pass** in all 32 state × landType × method combinations (holds to floating
+  point precision in every case, matching the exact-match precedent from the TI-only version of this
+  check).
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 212 per-plot rows (not a
+  population-level estimate) with the documented `PROP_CHNG`/`PREV_PROP_FOREST` columns present,
+  confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this combination for
+  `areaChange()` either — **pass**.
+- **`treeDomain` + `grpBy` interaction under each of SMA/LMA/EMA/ANNUAL, 4 states**: specifying
+  `treeDomain` expands the output with `TREE_DOMAIN1`/`TREE_DOMAIN2` indicator columns (whether the
+  domain was satisfied at each measurement), so unlike `area()`'s single-row-per-group case, the
+  "genuine restriction" and "`grpBy` preserves the total" checks sum `PREV_AREA` across *all* rows
+  (every `TREE_DOMAIN1`/`TREE_DOMAIN2` × `STATUS1`/`STATUS2` combination) per year, not one
+  `STATUS1`/`STATUS2` subset. With that correction, the filter still restricts the total (`filtered <
+  base` for every year) and `grpBy = OWNGRPCD` does not silently drop it for any group (summing across
+  groups reproduces the filtered total exactly, per year) — **pass** in all 16 state × method
+  combinations. (An initial version of this check, comparing only one `STATUS1 == STATUS2 == 'Forest'`
+  subset without accounting for the `TREE_DOMAIN1`/`TREE_DOMAIN2` expansion, spuriously appeared to
+  fail — this was a test-construction mistake, not a package bug, caught and corrected before finalizing
+  this report.)
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`/`area.md`.
+- **`method = 'ANNUAL'` with default arguments, 4 states**: runs without error and returns multiple
+  distinct-year rows (not pooled) in all four — **pass**. New regression coverage for the
+  `combineMR()`/`ANNUAL` bug described above.
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population-level estimate (only a structural sanity
   check was done) — same deferral as `tpa.md`/`area.md`.
-- `treeDomain`/`grpBy` interaction numeric validation (the historical v1.1.1 bug pattern) — not
-  re-verified with a dedicated EVALIDator-backed test in this pass, since `EXPCHNG` attributes have no
-  `TREE` join to filter via `wnum` (same limitation as `area()`'s `treeDomain`, see `area.md`,
-  "Notes"), and constructing an internal-consistency check analogous to `area.md`'s (filter has a
-  genuine effect + survives `grpBy`) for the *signed change* case is nontrivial (a `treeDomain`
-  restriction doesn't have an obviously predictable directional effect on `AREA_CHNG` the way it does
-  on `area()`'s always-nonnegative `AREA_TOTAL`). Existing structural tests (1, 3, 5 in
-  `test-areaChange.R`) confirm `treeDomain` runs without erroring; a deeper numeric check is left for
-  a future pass.
-- `method =` options other than `'TI'` (SMA/LMA/EMA/annual) — only exercised structurally (Test 7,
-  `method = 'EMA'`), consistent with the broader initiative's plan (EVALIDator only validates the TI
-  estimator directly).
+- `treeDomain`/`grpBy` interaction numeric validation against EVALIDator directly (as opposed to the
+  internal-consistency check now covered above and under non-TI methods) — not re-verified with a
+  dedicated EVALIDator-backed test in this pass, since `EXPCHNG` attributes have no `TREE` join to
+  filter via `wnum` (same limitation as `area()`'s `treeDomain`, see `area.md`, "Notes"). Existing
+  structural tests (1, 3, 5 in `test-areaChange.R`) confirm `treeDomain` runs without erroring; a
+  deeper EVALIDator-backed numeric check is left for a future pass.

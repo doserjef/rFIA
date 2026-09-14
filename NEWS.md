@@ -251,6 +251,22 @@ Full details on this validation are provided in the development version of `rFIA
 + Fixed a bug in `area()` where a hard-coded `PLOT_STATUS_CD == 1` filter (a leftover from code shared with `tpa()`, where it is valid since trees only occur on forest land) silently dropped every plot with no accessible forest before land-type domain indicators were applied. This caused large undercounts (up to two orders of magnitude) for every `landType` value other than the defaults of `'forest'`/`'timber'` (e.g. `'water'`, `'non-forest'`, `'all'`), and caused the documented `byLandType = TRUE` output to sum to well under the true total land area. `landType = 'forest'`/`'timber'` estimates were not affected.
 + Fixed a bug in `area()` where `nPlots_AREA_DEN` did not reflect restrictions imposed by `landType = 'timber'` or `areaDomain`, instead always reporting the plot count for the broader `landType = 'forest'` land base (the same class of bug as the `tpa()` `nPlots_AREA` fix described below). Point estimates and sampling errors were not affected.
 + Updated `area()` where `landType = 'all'` to now explicitly remove nonsampled conditions from the land area calculation (e.g. hazardous or denied-access plots). In prior versions, nonsampled conditions were included in the count of `landType = 'all'`, but this resulted in the sum of the different components when `byLandType = TRUE` to not sum to the total when `landType = 'all'`. 
++ Fixed a bug where `method = 'ANNUAL'` silently summed together every constituent panel's population
+  estimate into a single, badly inflated row (with an inflated plot count to match) instead of
+  reporting each sampled panel-year's own estimate separately, whenever it was run against a database
+  that had been restricted to a single "most recent" evaluation (e.g. via `clipFIA(mostRecent = TRUE)`).
+  Confirmed on Rhode Island: `area(clipFIA(fiaRI, mostRecent = TRUE), method = 'ANNUAL')` previously
+  returned a single row (labeled with the evaluation's nominal year) that was actually the sum of all 7
+  constituent panels' area estimates; it now correctly returns 7 separate rows, one per sampled
+  panel-year, matching the values obtained by running `method = 'ANNUAL'` against the full, unclipped
+  inventory history. Root cause: a shared internal utility (`combineMR()`, used to reconcile different
+  states' differing "most recent" reporting years under the `'TI'`/`'SMA'`/`'LMA'`/`'EMA'` estimators)
+  was also being unconditionally applied to `'ANNUAL'` output, which legitimately contains multiple
+  distinct-year rows per state -- `combineMR()` relabeled all of them to the same year, causing a
+  subsequent aggregation step to sum them together. This affects every estimation function that
+  supports `method = 'ANNUAL'` (not just `area()`), since `combineMR()` is shared internal utility;
+  confirmed the identical corruption and fix for `tpa()`. `'TI'`, `'SMA'`, `'LMA'`, and `'EMA'` were not
+  affected, since they already returned a single row per state before reaching this step.
 
 ### `volume()`
 

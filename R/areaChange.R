@@ -46,8 +46,8 @@ areaChange <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
     # different reporting schedules, i.e., if 2016 is most recent in MI and 2017 is
     # most recent in WI, combine them and label as 2017
     if (mr) {
-      tEst <- combineMR(tEst)
-      aEst <- combineMR(aEst)
+      tEst <- combineMR(tEst, method)
+      aEst <- combineMR(aEst, method)
     }
 
     # Totals and ratios -------------------------------------------------------

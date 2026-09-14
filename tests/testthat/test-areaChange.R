@@ -204,3 +204,157 @@ for (st in states) {
     })
   }
 }
+
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, areaChange()'s own internal identities hold regardless of
+# method, and the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional* checks
+# -- never exact equality (see tpa.md for the full writeup of why). See
+# tests/testthat/test-util.R for the underlying maWeights()/filterAnnual()/
+# combineMR() unit-level checks these per-function tests build on, and
+# tpa.md "Fixed" #6 for a package-wide combineMR()/ANNUAL bug found and
+# fixed during area()'s non-TI pass (also affected areaChange(), confirmed
+# below -- fixed before this section was written, so no new bug here).
+#
+# `PREV_AREA` (a plain, nonnegative area total -- the same role
+# `AREA_TOTAL` plays for `area()`) is used for the EMA/SMA convergence and
+# TI-vs-SMA bounded-agreement checks below, not the signed `AREA_CHNG`:
+# `AREA_CHNG` is driven by a small subpopulation of transitioning plots and
+# can be tiny or near a sign flip (confirmed empirically: RI's TI vs SMA
+# `AREA_CHNG` differ by ~49% relatively, vs. ~6% for `PREV_AREA`), so a
+# relative-tolerance bound on it is not meaningful -- consistent with
+# areaChange.md's existing deferral of a numeric `treeDomain` effect check
+# on `AREA_CHNG` for the same reason.
+
+# Test 12 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI), using PREV_AREA.
+# Never exactly equal -- lambda never literally reaches 1 in a real call
+# (see test-util.R for why the exact boundary is degenerate) -- so this
+# checks the trend, not a fixed-tolerance snapshot. Mirrors tpa.md/area.md.
+test_that("areaChange() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(areaChange(db_ri, landType = 'forest', chngType = 'net', method = 'SMA'))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(areaChange(db_ri, landType = 'forest', chngType = 'net', method = 'EMA', lambda = lam))
+    abs(ema$PREV_AREA - sma$PREV_AREA)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 100)
+})
+
+# Test 13 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general (see
+# tpa.md). Reusing the same flat 10% relative tolerance established
+# empirically there (panel plot-count CV is a property of each state's
+# panel structure, not the estimator): RI/NC/CO/OR's PREV_AREA landed within
+# ~6.5% of each other (-6.49%/1.12%/-1.72%/-2.35%), inside the 10% bound.
+for (st in states) {
+  test_that(paste("areaChange() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(areaChange(dbs[[st]], landType = 'forest', chngType = 'net', method = 'TI'))
+    sma <- as.data.frame(areaChange(dbs[[st]], landType = 'forest', chngType = 'net', method = 'SMA'))
+    expect_equal(sma$PREV_AREA, ti$PREV_AREA, tolerance = 0.10)
+  })
+}
+
+# Test 14 ------------------------------
+# areaChange()'s own internal identity (Test 9 above, TI-only) re-checked
+# under every non-TI method: net AREA_CHNG must equal reversion - diversion
+# from the component breakdown -- checked *per YEAR*, since method =
+# 'ANNUAL' returns one row per sampled panel-year. A year's diversion or
+# reversion category can be legitimately absent from the component output
+# (zero qualifying plots that year -- confirmed on RI, a small state where
+# several individual annual panels have a diversion event but no reversion
+# event, or vice versa, e.g. 2019 has only a Forest -> Non-forest row), so a
+# missing category is treated as AREA_CHNG = 0 for that year rather than
+# requiring both rows to be present.
+for (st in states) {
+  for (lt in c('forest', 'timber')) {
+    label1 <- if (lt == 'forest') 'Forest' else 'Timber'
+    label2 <- if (lt == 'forest') 'Non-forest' else 'Non-timber'
+
+    for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+      test_that(paste("areaChange() net AREA_CHNG equals reversion - diversion under method =",
+                       m, "(", st, ",", lt, ")"), {
+        db_st <- dbs[[st]]
+        net <- as.data.frame(areaChange(db_st, landType = lt, chngType = 'net', method = m))
+        comp <- as.data.frame(areaChange(db_st, landType = lt, chngType = 'component', method = m))
+
+        diversion <- comp[comp$STATUS1 == label1 & comp$STATUS2 == label2, c('YEAR', 'AREA_CHNG')]
+        reversion <- comp[comp$STATUS1 == label2 & comp$STATUS2 == label1, c('YEAR', 'AREA_CHNG')]
+        merged <- merge(net[, c('YEAR', 'AREA_CHNG')], diversion, by = 'YEAR', all.x = TRUE, suffixes = c('_net', '_div'))
+        merged <- merge(merged, reversion, by = 'YEAR', all.x = TRUE)
+        names(merged)[4] <- 'AREA_CHNG_rev'
+        merged$AREA_CHNG_div[is.na(merged$AREA_CHNG_div)] <- 0
+        merged$AREA_CHNG_rev[is.na(merged$AREA_CHNG_rev)] <- 0
+
+        expect_equal(nrow(merged), length(unique(net$YEAR))) # every year present, none dropped
+        expect_equal(merged$AREA_CHNG_net, merged$AREA_CHNG_rev - merged$AREA_CHNG_div, tolerance = 1e-4)
+      })
+    }
+  }
+}
+
+# Test 15 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error. Mirrors tpa.md/area.md.
+test_that("areaChange() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(areaChange(db_ri, landType = 'forest', method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'PROP_CHNG', 'PREV_PROP_FOREST') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 16 ------------------------------
+# treeDomain + grpBy interaction under every non-TI method. Specifying
+# treeDomain expands areaChange()'s output with TREE_DOMAIN1/TREE_DOMAIN2
+# indicator columns (whether the domain was satisfied at each measurement),
+# so unlike area()'s simpler single-row-per-group case, the "genuine
+# restriction" and "grpBy preserves the total" checks below sum PREV_AREA
+# across ALL rows (all TREE_DOMAIN1/2 x STATUS1/STATUS2 combinations) per
+# YEAR, not just one STATUS1/STATUS2 subset.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("areaChange() treeDomain survives grpBy under method =", m, "(", st, ")"), {
+      db_st <- dbs[[st]]
+      expect_no_warning({
+        base <- as.data.frame(areaChange(db_st, landType = 'forest', chngType = 'component', method = m))
+        filtered <- as.data.frame(areaChange(db_st, landType = 'forest', treeDomain = DIA > 20,
+                                             chngType = 'component', method = m))
+        grouped <- as.data.frame(areaChange(db_st, landType = 'forest', treeDomain = DIA > 20,
+                                            grpBy = OWNGRPCD, chngType = 'component', method = m))
+      })
+      baseYr <- aggregate(PREV_AREA ~ YEAR, data = base, sum)
+      filtYr <- aggregate(PREV_AREA ~ YEAR, data = filtered, sum)
+      grpYr <- aggregate(PREV_AREA ~ YEAR, data = grouped, sum)
+
+      mergedBase <- merge(filtYr, baseYr, by = 'YEAR', suffixes = c('_filt', '_base'))
+      expect_true(all(mergedBase$PREV_AREA_filt < mergedBase$PREV_AREA_base))
+
+      mergedGrouped <- merge(grpYr, filtYr, by = 'YEAR', suffixes = c('_grp', '_filt'))
+      expect_equal(nrow(mergedGrouped), nrow(baseYr))
+      expect_equal(mergedGrouped$PREV_AREA_grp, mergedGrouped$PREV_AREA_filt, tolerance = 1e-3)
+    })
+  }
+}
+
+# Test 17 ------------------------------
+# Plain default-args smoke tests, one per state, for EMA and ANNUAL. ANNUAL
+# is new regression coverage specifically for the combineMR()/ANNUAL
+# pooling bug found and fixed during area()'s non-TI pass (tpa.md, "Fixed"
+# #6) -- confirmed to affect areaChange() too, since it shares the same
+# combineMR() call in R/areaChange.R. EMA mirrors tpa.md's/area.md's v1.1.1
+# regression coverage.
+for (st in states) {
+  test_that(paste("areaChange() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(areaChange(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+
+  test_that(paste("areaChange() runs with method = 'ANNUAL' and default arguments, one row per panel (", st, ")"), {
+    expect_no_error(out <- as.data.frame(areaChange(dbs[[st]], method = 'ANNUAL')))
+    expect_s3_class(out, "data.frame")
+    expect_gt(length(unique(out$YEAR)), 1) # not pooled into a single mislabeled row
+  })
+}

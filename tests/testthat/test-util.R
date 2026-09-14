@@ -230,3 +230,42 @@ test_that("filterAnnual is not fooled by a garbage YEAR = NA hosting candidate",
   expect_equal(out$YEAR, 2009)
   expect_equal(out$val_mean, 150) # still correctly picks the higher-nplts real candidate
 })
+
+# combineMR() ---------------------------------------------------------------
+# Shared by every estimator dispatcher (area(), tpa(), biomass(), etc.) to
+# reconcile *different states'* differing "most recent" reporting years under
+# TI/SMA/LMA/EMA before combining them into one row (e.g. state A's most
+# recent year is 2023, state B's is 2024 -- relabel both 2024 so they combine
+# into a single row). It must NOT touch method = 'ANNUAL' output, which
+# legitimately contains multiple distinct-YEAR rows per state (one per real
+# sampled panel, produced by filterAnnual() above) -- relabeling those to a
+# single YEAR previously caused every panel to be silently summed into one
+# inflated, mislabeled row (see core_references/validation/tpa.md, "Fixed"
+# #6, and core_references/validation/area.md).
+
+test_that("combineMR() relabels every row to the max YEAR for non-ANNUAL methods", {
+  x <- tibble::tibble(YEAR = c(2023, 2024), STATECD = c(1, 2), val = c(10, 20))
+  for (m in c("TI", "SMA", "LMA", "EMA")) {
+    out <- rFIA:::combineMR(x, m)
+    expect_true(all(out$YEAR == 2024), label = paste0("method=", m))
+    # Only YEAR is touched -- no other column changes.
+    expect_equal(out$val, x$val, label = paste0("method=", m))
+  }
+})
+
+test_that("combineMR() is a no-op for method = 'ANNUAL', even with multiple distinct YEARs", {
+  x <- tibble::tibble(YEAR = 2019:2025, STATECD = 44, val = seq_len(7))
+  out <- rFIA:::combineMR(x, "ANNUAL")
+  expect_equal(out, x)
+  # Case-insensitive, matching every other method-dispatch check in the package.
+  out_lower <- rFIA:::combineMR(x, "annual")
+  expect_equal(out_lower, x)
+})
+
+test_that("combineMR() handles the 0-row edge case for every method without warning", {
+  x <- tibble::tibble(YEAR = numeric(0), STATECD = numeric(0), val = numeric(0))
+  for (m in c("TI", "SMA", "LMA", "EMA", "ANNUAL")) {
+    expect_no_warning(out <- rFIA:::combineMR(x, m))
+    expect_equal(nrow(out), 0)
+  }
+})
