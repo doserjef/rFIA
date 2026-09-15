@@ -143,12 +143,87 @@ methodology is designed to surface: `VOL_ACRE`/`BIO_ACRE`/`CARB_ACRE` matched EV
 so a structural/point-estimate-only test suite (the pre-existing `test-dwm.R`) would never have
 caught any of these.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `dwm()`'s output behaves sanely and consistently
+with the already-validated TI estimates wherever the documentation actually claims a relationship. See
+`tests/testthat/test-util.R` for the underlying unit-level checks on this shared machinery, and
+`tpa.md` (the template this section follows) for the full non-TI methodology. `tpa.md`'s "Fixed" #6
+documents a package-wide `combineMR()`/`ANNUAL` bug found and fixed during `area()`'s non-TI pass;
+`dwm()` shares the same call site and was already covered by that fix before this section was written.
+
+**RI is excluded from every population-estimation check in this section**, a departure from every
+other function's 4-state pattern. Confirmed directly, independent of anything in this validation
+pass: RI's most-recent `EXPDWM` evaluation (`EVALID` 442507, nominal year 2025) currently has **zero**
+matching rows in the locally cached `COND_DWM_CALC` extract -- the most recent `EVALID` that table
+actually has data for is 442407 (2024). This is FIA's real-world phase-3 (DWM) data publication
+lagging behind the core `EXPCURR` evaluation cycle, not a package bug: `dwm(db_ri, method = 'TI')`
+itself already returns a clean, correct 0-row result under the current data cache, and the
+*pre-existing, unmodified* EVALIDator-comparison tests above (Tests 9-12) already fail for RI against
+today's live cache for the identical reason -- this predates and is unrelated to this pass.
+`byPlot = TRUE` output is unaffected (it doesn't depend on the current population-estimation eval the
+same way) and still uses RI, matching every other function's pattern.
+
+**A flat relative-tolerance TI-vs-SMA bound (used for every other function) is not meaningful for
+`dwm()`** and was not applied. Confirmed empirically: NC's TI vs. SMA `VOL_ACRE` differ by ~127%
+(665.3 vs. 1508.2), which looks alarming in isolation but is fully explained by both estimates' own
+enormous sampling error (`VOL_ACRE_SE` = 34.5% for TI, 67.7% for SMA) -- the two point estimates are
+well within a couple of standard errors of each other. This is down woody material's inherently
+clumpy spatial distribution (a handful of logs or slash piles can dominate a small phase-3 sample)
+interacting with `dwm()`'s already-small sample sizes, not a bug -- the same class of deferral
+`areaChange.md` made for its similarly noisy `AREA_CHNG` metric. Only a finite/non-negative sanity
+check was used instead.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (NC)**: `|EMA_VOL_ACRE - SMA_VOL_ACRE|` shrinks monotonically as lambda
+  increases, and by more than 99% from lambda = 0.5 to lambda = 0.999 (1004.6 → 345.8 → 36.5 → 3.7) —
+  **pass**, confirming the same limiting relationship already established in `tpa.md` holds at the
+  `dwm()` output level too, once accounting for `VOL_ACRE`'s larger absolute scale (a relative rather
+  than absolute final-distance bound was used for this reason).
+- **TI and SMA both finite/non-negative, 3 states (NC/CO/OR)**: **pass** in all three (see above for
+  why a numeric bound was not applied).
+- **Totals-vs-per-acre consistency under SMA/LMA/EMA/ANNUAL, 3 states, all three metrics**:
+  `VOL_TOTAL`/`BIO_TOTAL`/`CARB_TOTAL` divided by `AREA_TOTAL` reproduce
+  `VOL_ACRE`/`BIO_ACRE`/`CARB_ACRE` to `1e-9` tolerance in all 12 state × method combinations —
+  **pass**.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 42 per-plot rows (not a
+  population-level estimate), confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this
+  combination — **pass**. RI's byPlot data is real and usable despite the population-estimation gap
+  noted above.
+- **`areaDomain` (mesic physiographic classes) + `grpBy = OWNGRPCD` under each of SMA/LMA/EMA/ANNUAL,
+  3 states**: the filter restricts (or exactly reproduces, in a legitimate edge case per `carbon.md`'s
+  precedent) the unfiltered total for every year, and `grpBy` does not silently drop it for any group
+  — **pass** in all 12 state × method combinations.
+- **`method = 'EMA'` with default arguments, 3 states**: runs without error in all three — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`.
+- **`method = 'ANNUAL'` with default arguments, 3 states**: runs without error and returns multiple
+  distinct-year rows (not pooled) in all three — **pass**. Confirms `dwm()` is unaffected by the
+  `combineMR()` bug described in `tpa.md`.
+
+## Findings (reported, not fixed — see bug-handling protocol)
+
+1. **`method = 'ANNUAL'` emits an unguarded `max()`-on-empty-group warning when a state has zero
+   population-estimation data for the requested attribute.** Reproduced on RI specifically, as a
+   direct consequence of the data-availability gap described above (RI's current `EXPDWM` evaluation
+   has zero `COND_DWM_CALC` rows): `dwm(db_ri, method = 'ANNUAL')` emits `"no non-missing arguments to
+   max; returning -Inf"` from inside `filterAnnual()`'s `dplyr::mutate(keep = ...)` step, then
+   correctly returns a clean 0-row result (the same correct output `method = 'TI'` already produces
+   for RI with no warning at all). Not fixed this pass: the *output* is correct, only a diagnostic
+   warning is spurious, and the only known trigger is a state having literally zero rows for the
+   specific attribute/evaluation combination requested -- an unusual condition currently reachable via
+   RI's DWM data-publication gap, but not exercised as a deliberate user-facing empty-domain case (that
+   class of bug, matching-nothing `treeDomain`/`areaDomain`, was already fixed elsewhere -- see `tpa.md`
+   "Fixed" #2 -- and is confirmed unrelated: this warning originates inside `filterAnnual()`, a
+   different code path). No regression test is pinned to this, since it depends on today's transient
+   local data cache state rather than a stable, reproducible package condition.
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population estimate (only totals-vs-per-acre was
   checked numerically, same as prior passes).
-- `method` options other than `'TI'` (EVALIDator has no equivalent; internal-consistency-only checks
-  per the plan, not yet added).
 - `landType = 'timber'` was only checked for internal plot-count consistency; no EVALIDator
   timberland DWM attribute exists to check point estimates against.
 - `DUFF`-specific point estimates were not checked against an EVALIDator attribute (none exists in

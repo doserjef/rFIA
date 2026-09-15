@@ -731,7 +731,15 @@ mergeSmallStrata <- function(db, pops) {
   # If any are too small, i.e., only one plot --> do some merging
   if (sum(stratYr$wrong, na.rm = TRUE) > 0){
 
-    for (i in stratYr$stratID[stratYr$wrong == 1]) {
+    # A stratID with INVYR = NA represents plots that are stratified into
+    # the population but excluded from this function's actual estimation
+    # (e.g. vegStruct()/invasive()'s P2-ancillary-protocol pre-filter of
+    # db$PLOT drops these plots' INVYR when handlePops() left_joins onto
+    # the now-narrower db$PLOT) -- not a real per-year sample needing
+    # small-strata pooling. Excluded from needing a merge partner (here)
+    # and from being selected as one (both neighbor searches below), since
+    # neither role makes sense for a row with no real INVYR of its own.
+    for (i in stratYr$stratID[stratYr$wrong == 1 & !is.na(stratYr$INVYR)]) {
 
       # Subset the row
       dat <- filter(stratYr, stratID == i)
@@ -744,7 +752,8 @@ mergeSmallStrata <- function(db, pops) {
         neighbors <- stratYr %>%
           filter(ESTN_UNIT_CN == dat$ESTN_UNIT_CN) %>%
           filter(INVYR == dat$INVYR) %>%
-          filter(stratID != i)
+          filter(stratID != i) %>%
+          filter(!is.na(INVYR))
 
         if (nrow(neighbors) < 1) {
           warnMe <- c(warnMe, TRUE)
@@ -781,7 +790,8 @@ mergeSmallStrata <- function(db, pops) {
         # No other strata measured in the same year, so merge years instead
         neighbors <- stratYr %>%
           filter(STRATUM_CN == dat$STRATUM_CN) %>%
-          filter(stratID != i)
+          filter(stratID != i) %>%
+          filter(!is.na(INVYR))
 
         if (nrow(neighbors) > 0) {
           warnMe <- c(warnMe, FALSE)

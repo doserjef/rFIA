@@ -229,13 +229,68 @@ general (e.g. for states/conditions not in this four-state sample), only confirm
 data actually tested. Worth a quick re-check if `carbon()`'s `STAND_DEAD` component is ever
 extended or refactored.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `carbon()`'s output behaves sanely and
+consistently with the already-validated TI estimates wherever the documentation actually claims a
+relationship. See `tests/testthat/test-util.R` for the underlying unit-level checks on this shared
+machinery, and `tpa.md` (the template this section follows) for the full non-TI methodology, the two
+invariants that must not be over-asserted, and "Fixed" #6 for a package-wide `combineMR()`/`ANNUAL`
+bug found and fixed during `area()`'s non-TI pass. `carbon()` shares the same `combineMR()` call site
+and was already covered by that fix before this section was written, confirmed below by a clean
+multi-row `ANNUAL` smoke test -- no new bug found this pass.
+
+Since `carbon()` has no `treeDomain`/`bySpecies` (see "`carbon()` has no `treeDomain`" above), the
+domain-filter interaction check below uses `areaDomain` + `grpBy` only, mirroring `area.md`'s pattern
+rather than `tpa.md`'s `treeDomain`-based one. This pass also upgraded the pre-existing
+`test-carbon.R` Test 6 (`method = 'LMA'`, previously computed but never asserted against) into a real
+class check.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI)**: `|EMA_CARB_ACRE - SMA_CARB_ACRE|` shrinks monotonically as lambda
+  increases (2.11 → 0.23 → 0.017 → 0.002 for lambda = 0.5/0.9/0.99/0.999) — **pass**, confirms the
+  same limiting relationship already established in `tpa.md` holds at the `carbon()` output level too.
+- **TI vs. SMA bounded agreement, 4 states**: reusing the flat 10% relative tolerance established
+  empirically in `tpa.md` (panel plot-count CV is a property of each state's panel structure, not the
+  estimator, so it applies unchanged here):
+
+  | State | TI CARB_ACRE | SMA CARB_ACRE | Relative diff |
+  |---|---|---|---|
+  | RI | 119.3767 | 119.8042 | 0.36% |
+  | NC | 89.0200 | 87.2196 | −2.02% |
+  | CO | 70.7214 | 71.1078 | 0.55% |
+  | OR | 114.4811 | 117.7560 | 2.86% |
+
+  All four states land well within the 10% bound — **pass** in all four.
+- **Totals-vs-per-acre consistency under SMA/LMA/EMA/ANNUAL, 4 states**: `CARB_TOTAL / AREA_TOTAL ==
+  CARB_ACRE` to `1e-6` tolerance in all 16 state × method combinations — **pass**. The totals/per-acre
+  plumbing is not TI-specific.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 132 per-plot rows (not a
+  population-level estimate), confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this
+  combination — **pass**.
+- **`areaDomain` (mesic physiographic classes) + `grpBy = OWNGRPCD` under each of SMA/LMA/EMA/ANNUAL,
+  4 states**: the filter restricts (or, in one legitimate edge case, exactly reproduces) the
+  unfiltered total for every year, and `grpBy` does not silently drop it for any group (summing across
+  groups reproduces the filtered total exactly, per year) — **pass** in all 16 state × method
+  combinations. One panel-year (RI, `method = 'ANNUAL'`, 2025) had `filtered == base` exactly rather
+  than `filtered < base`: confirmed this is a genuine data coincidence, not a bug -- every plot
+  sampled in that specific panel happens to already fall within the mesic physiographic classes, so
+  the filter has no plots left to exclude that year. Every other year/state/method combination shows a
+  real reduction; the check uses `<=` rather than strict `<` to correctly allow this case rather than
+  over-asserting.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`.
+- **`method = 'ANNUAL'` with default arguments, 4 states**: runs without error and returns multiple
+  distinct-year rows (not pooled) in all four — **pass**. Confirms `carbon()` is unaffected by the
+  `combineMR()` bug described above (already fixed by the time this pass began).
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population-level estimate (only structural/smoke
   coverage exists, pre-existing `test-carbon.R` Test 4) -- same deferral as `tpa()`/`biomass()`.
-- `method` options other than `'TI'` (EVALIDator has no equivalent) -- only structural coverage
-  exists (pre-existing `test-carbon.R` Test 6, `method = 'LMA'`), not the internal-consistency
-  checks called for by the plan.
 - `landType = 'all'` has no EVALIDator equivalent at all (no "all land" carbon attribute exists) --
   only structural coverage exists (pre-existing `test-carbon.R` Test 3).
 - `condList = TRUE` output was not separately re-validated after the `nPlots_AREA` fix (the fix

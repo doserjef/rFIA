@@ -174,10 +174,53 @@ in `a`).
 warning. Full package test suite re-run with no regressions. Regression test added:
 `tests/testthat/test-standStruct.R` now asserts `expect_no_warning()` around this call.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these (nor, as established above, for `standStruct()`'s TI estimate
+either), so correctness here means: the shared weighting machinery (`maWeights()`/`filterAnnual()`/
+`combineMR()` in `R/util.R`, used by every `sumToEU()`-based estimator) does what its own math says it
+does, and `standStruct()`'s output behaves sanely and consistently with the already-validated TI
+estimates wherever the documentation actually claims a relationship. See `tests/testthat/test-util.R`
+for the underlying unit-level checks on this shared machinery, and `tpa.md` (the template this section
+follows) for the full non-TI methodology. `tpa.md`'s "Fixed" #6 documents a package-wide
+`combineMR()`/`ANNUAL` bug found and fixed during `area()`'s non-TI pass; `standStruct()` shares the
+same call site and was already covered by that fix before this section was written.
+
+`AREA_TOTAL` -- identical to `area()`'s own `AREA_TOTAL`, since both share the same area machinery, not
+`COVER_PCT` -- is used for the EMA/SMA convergence and TI-vs-SMA bounded-agreement checks below:
+`COVER_PCT` is a per-`STAGE` proportion split across 4 rows, and a rare stage category could have a
+small, noisy value not suited to a relative-tolerance bound. `standStruct()` has no
+`treeDomain`/`bySpecies` (only `landType`/`areaDomain`, like `area()`), so the domain-filter check uses
+`areaDomain` + `grpBy`, mirroring `area.md`'s pattern.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI), AREA_TOTAL**: shrinks monotonically as lambda increases (21239 →
+  2587 → 213 → 21 for lambda = 0.5/0.9/0.99/0.999) -- identical to `area.md`'s own measurement, as
+  expected since `AREA_TOTAL` is computed by the same shared machinery — **pass**.
+- **TI vs. SMA bounded agreement, 4 states, AREA_TOTAL**: reusing the flat 10% relative tolerance
+  established empirically in `tpa.md`, and numerically identical to `area.md`'s own table
+  (RI −0.65%, NC 0.76%, CO −2.15%, OR −4.98%) -- **pass** in all four.
+- **`COVER_PCT` sums to 100% under SMA/LMA/EMA/ANNUAL, 4 states**: re-running this function's central
+  internal identity (Test 8, TI-only) under every non-TI method, checked *per YEAR* for `ANNUAL` --
+  **pass** in all 16 state × method combinations (exact to `1e-6` in every case).
+- **Totals-vs-per-acre consistency (`STAGE_AREA_TOTAL / AREA_TOTAL * 100 == COVER_PCT`) under
+  SMA/LMA/EMA/ANNUAL, 4 states**: **pass** in all 16 combinations.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 141 per-plot rows (not a
+  population-level estimate) with the documented `STAGE`/`PROP_STAGE` columns present, confirming
+  `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this combination — **pass**.
+- **`areaDomain` (mesic physiographic classes) + `grpBy = OWNGRPCD` under each of SMA/LMA/EMA/ANNUAL,
+  4 states**: the filter restricts (or, in a legitimate edge case, exactly reproduces -- see
+  `carbon.md`'s precedent) the unfiltered total for every year, and `grpBy` does not silently drop it
+  for any group — **pass** in all 16 state × method combinations.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`.
+- **`method = 'ANNUAL'` with default arguments, 4 states**: runs without error and returns multiple
+  distinct-year rows (not pooled) in all four — **pass**. Confirms `standStruct()` is unaffected by
+  the `combineMR()` bug described above (already fixed by the time this pass began).
+
 ## Deferred to follow-up (not covered this pass)
 
-- `method` options other than `'TI'` (no EVALIDator equivalent; internal-consistency-only checks per
-  the plan, not yet added).
 - `byPlot = TRUE` aggregating to reproduce the population-level estimate exactly (only the specific
   hand-calculated/regression-tested plots above were checked, not a full aggregation reconciliation --
   same limitation noted in `tpa.md`/`seedling.md`/`invasive.md`).

@@ -298,3 +298,113 @@ test_that("volume() bySpecies matches EVALIDator per-species (RI)", {
   }
 })
 
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, totals/per-acre plumbing holds regardless of method, and
+# the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md for the full writeup of why).
+# See tests/testthat/test-util.R for the underlying maWeights()/
+# filterAnnual()/combineMR() unit-level checks these per-function tests
+# build on, and tpa.md "Fixed" #6 for a package-wide combineMR()/ANNUAL bug
+# found and fixed during area()'s non-TI pass -- volume() shares the same
+# combineMR() call site and was unaffected by the time this section was
+# written (already fixed at the shared-utility level), confirmed below by
+# the ANNUAL smoke test returning multiple rows per state, not pooled ones.
+
+# Test 15 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI). Never exactly
+# equal (see test-util.R for why the exact boundary is degenerate) -- this
+# checks the trend, not a fixed-tolerance snapshot. Mirrors tpa.md's Test 16.
+test_that("volume() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(volume(db_ri, method = 'SMA'))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(volume(db_ri, method = 'EMA', lambda = lam))
+    abs(ema$BOLE_CF_ACRE - sma$BOLE_CF_ACRE)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 1)
+})
+
+# Test 16 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general (see
+# tpa.md). Reusing the same flat 10% relative tolerance established
+# empirically there (panel plot-count CV is a property of each state's
+# panel structure, not the estimator): RI/NC/CO/OR's BOLE_CF_ACRE landed
+# within ~5.9% of each other (0.03%/-5.13%/2.76%/5.89%), inside the 10%
+# bound.
+for (st in states) {
+  test_that(paste("volume() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(volume(dbs[[st]], method = 'TI'))
+    sma <- as.data.frame(volume(dbs[[st]], method = 'SMA'))
+    expect_equal(sma$BOLE_CF_ACRE, ti$BOLE_CF_ACRE, tolerance = 0.10)
+  })
+}
+
+# Test 17 ------------------------------
+# totals = TRUE / per-acre consistency holds under every non-TI method, not
+# just TI (Test 9 above only checked the TI/default path), for all three
+# volume metrics.
+for (st in states) {
+  test_that(paste("volume() totals are consistent with per-acre estimates under non-TI methods (", st, ")"), {
+    for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+      out <- as.data.frame(volume(dbs[[st]], totals = TRUE, method = m))
+      expect_equal(out$BOLE_CF_TOTAL / out$AREA_TOTAL, out$BOLE_CF_ACRE, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " BOLE_CF_ACRE"))
+      expect_equal(out$SAW_CF_TOTAL / out$AREA_TOTAL, out$SAW_CF_ACRE, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " SAW_CF_ACRE"))
+      expect_equal(out$SAW_MBF_TOTAL / out$AREA_TOTAL, out$SAW_MBF_ACRE, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " SAW_MBF_ACRE"))
+    }
+  })
+}
+
+# Test 18 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error.
+test_that("volume() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(volume(db_ri, method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'BOLE_CF_ACRE') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 19 ------------------------------
+# Domain filter + bySpecies interaction (the historical
+# area()/areaChange() bug pattern from v1.1.1, see tpa.md Test 15) re-run
+# under every non-TI method: no error, no warning, sane shape.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("volume() domain filter + bySpecies runs cleanly under method =", m, "(", st, ")"), {
+      expect_no_warning(
+        out <- as.data.frame(volume(dbs[[st]], treeDomain = DIA >= 20, areaDomain = PHYSCLCD %in% 21:29,
+                                    bySpecies = TRUE, method = m))
+      )
+      expect_true(nrow(out) >= 0)
+      expect_true(all(out$BOLE_CF_ACRE >= 0, na.rm = TRUE))
+    })
+  }
+}
+
+# Test 20 ------------------------------
+# Plain default-args smoke tests, one per state, for EMA and ANNUAL. ANNUAL
+# is regression coverage for the combineMR()/ANNUAL pooling bug found and
+# fixed during area()'s non-TI pass (tpa.md, "Fixed" #6) -- volume() shares
+# the same combineMR() call site, so a returned multi-row (not pooled)
+# result here confirms the fix covers it too. EMA mirrors tpa.md's v1.1.1
+# regression coverage.
+for (st in states) {
+  test_that(paste("volume() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(volume(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+
+  test_that(paste("volume() runs with method = 'ANNUAL' and default arguments, one row per panel (", st, ")"), {
+    expect_no_error(out <- as.data.frame(volume(dbs[[st]], method = 'ANNUAL')))
+    expect_s3_class(out, "data.frame")
+    expect_gt(nrow(out), 1) # not pooled into a single mislabeled row
+  })
+}
+

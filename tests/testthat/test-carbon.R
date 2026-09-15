@@ -49,6 +49,9 @@ test_that('out is correct', {
 # Test 6 ------------------------------
 # Over time with method = 'LMA'
 out <- carbon(db = fiaRI, method = 'LMA', polys = countiesRI)
+test_that('out is correct', {
+  expect_s3_class(out, 'tbl_df')
+})
 
 # Internal consistency checks (no EVALIDator, no network needed) ----------
 # These only require the local FIADB extract cache, not network access, so
@@ -248,5 +251,131 @@ for (st in states) {
     out <- as.data.frame(carbon(db_st, byPool = FALSE, areaDomain = PHYSCLCD %in% 21:29))
     expect_equal(out$CARB_ACRE, ref$ratioEstimate, tolerance = 1e-6)
     expect_equal(out$nPlots_AREA, ref$denPlotCount)
+  })
+}
+
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, totals/per-acre plumbing holds regardless of method, and
+# the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md for the full writeup of why).
+# See tests/testthat/test-util.R for the underlying maWeights()/
+# filterAnnual()/combineMR() unit-level checks these per-function tests
+# build on, and tpa.md "Fixed" #6 for a package-wide combineMR()/ANNUAL bug
+# found and fixed during area()'s non-TI pass -- carbon() shares the same
+# combineMR() call site and was unaffected by the time this section was
+# written (already fixed at the shared-utility level), confirmed below by
+# the ANNUAL smoke test returning multiple rows per state, not pooled ones.
+# carbon() has no treeDomain/bySpecies (see carbon.md, "carbon() has no
+# treeDomain"), so the domain-filter check below uses areaDomain + grpBy
+# only, mirroring area()'s Test 9/Test 20 pattern rather than tpa.md's
+# treeDomain-based one.
+
+# Test 14 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI). Never exactly
+# equal (see test-util.R for why the exact boundary is degenerate) -- this
+# checks the trend, not a fixed-tolerance snapshot. Mirrors tpa.md's Test 16.
+test_that("carbon() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(carbon(db_ri, byPool = FALSE, method = 'SMA'))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(carbon(db_ri, byPool = FALSE, method = 'EMA', lambda = lam))
+    abs(ema$CARB_ACRE - sma$CARB_ACRE)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 1)
+})
+
+# Test 15 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general (see
+# tpa.md). Reusing the same flat 10% relative tolerance established
+# empirically there (panel plot-count CV is a property of each state's
+# panel structure, not the estimator): RI/NC/CO/OR's CARB_ACRE landed
+# within ~2.9% of each other (0.36%/-2.02%/0.55%/2.86%), well inside the
+# 10% bound.
+for (st in states) {
+  test_that(paste("carbon() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(carbon(dbs[[st]], byPool = FALSE, method = 'TI'))
+    sma <- as.data.frame(carbon(dbs[[st]], byPool = FALSE, method = 'SMA'))
+    expect_equal(sma$CARB_ACRE, ti$CARB_ACRE, tolerance = 0.10)
+  })
+}
+
+# Test 16 ------------------------------
+# totals = TRUE / per-acre consistency holds under every non-TI method, not
+# just TI (Test 8 above only checked the TI/default path).
+for (st in states) {
+  test_that(paste("carbon() totals are consistent with per-acre estimates under non-TI methods (", st, ")"), {
+    for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+      out <- as.data.frame(carbon(dbs[[st]], byPool = FALSE, totals = TRUE, method = m))
+      expect_equal(out$CARB_TOTAL / out$AREA_TOTAL, out$CARB_ACRE, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " CARB_ACRE"))
+    }
+  })
+}
+
+# Test 17 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error.
+test_that("carbon() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(carbon(db_ri, byPool = FALSE, method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'CARB_ACRE') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 18 ------------------------------
+# areaDomain + grpBy interaction under every non-TI method: the filter must
+# still restrict the total, and grpBy = OWNGRPCD must not silently drop it
+# for any group -- checked *per YEAR*, since ANNUAL returns multiple
+# year-rows. Uses <= rather than strict < for the "filter restricts"
+# check: confirmed on RI/ANUAL's most data-complete panel (2025) that every
+# plot that year happens to already fall within the mesic physiographic
+# classes, so the filtered and unfiltered totals are legitimately identical
+# for that one panel -- not a bug (every other year/state/method shows a
+# real reduction).
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("carbon() areaDomain survives grpBy under method =", m, "(", st, ")"), {
+      db_st <- dbs[[st]]
+      expect_no_warning({
+        base <- as.data.frame(carbon(db_st, byPool = FALSE, totals = TRUE, method = m))
+        filtered <- as.data.frame(carbon(db_st, byPool = FALSE, areaDomain = PHYSCLCD %in% 21:29,
+                                         totals = TRUE, method = m))
+        grouped <- as.data.frame(carbon(db_st, byPool = FALSE, areaDomain = PHYSCLCD %in% 21:29,
+                                        grpBy = OWNGRPCD, totals = TRUE, method = m))
+      })
+      mergedBase <- merge(filtered[, c("YEAR", "CARB_TOTAL")], base[, c("YEAR", "CARB_TOTAL")],
+                          by = "YEAR", suffixes = c("_filt", "_base"))
+      expect_true(all(mergedBase$CARB_TOTAL_filt <= mergedBase$CARB_TOTAL_base))
+
+      byYearGrouped <- aggregate(CARB_TOTAL ~ YEAR, data = grouped, sum)
+      mergedGrouped <- merge(byYearGrouped, filtered[, c("YEAR", "CARB_TOTAL")],
+                             by = "YEAR", suffixes = c("_grp", "_filt"))
+      expect_equal(nrow(mergedGrouped), nrow(byYearGrouped))
+      expect_equal(mergedGrouped$CARB_TOTAL_grp, mergedGrouped$CARB_TOTAL_filt, tolerance = 1e-3)
+    })
+  }
+}
+
+# Test 19 ------------------------------
+# Plain default-args smoke tests, one per state, for EMA and ANNUAL. ANNUAL
+# is regression coverage for the combineMR()/ANNUAL pooling bug found and
+# fixed during area()'s non-TI pass (tpa.md, "Fixed" #6) -- carbon() shares
+# the same combineMR() call site, so a returned multi-row (not pooled)
+# result here confirms the fix covers it too. EMA mirrors tpa.md's v1.1.1
+# regression coverage.
+for (st in states) {
+  test_that(paste("carbon() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(carbon(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+
+  test_that(paste("carbon() runs with method = 'ANNUAL' and default arguments, multiple rows per panel (", st, ")"), {
+    expect_no_error(out <- as.data.frame(carbon(dbs[[st]], method = 'ANNUAL')))
+    expect_s3_class(out, "data.frame")
+    expect_gt(length(unique(out$YEAR)), 1) # not pooled into a single mislabeled row
   })
 }
