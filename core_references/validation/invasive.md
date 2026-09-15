@@ -168,12 +168,40 @@ introduced a failure mode (silent row-dropping via an incomplete reference table
 attribute-matching approach would never have surfaced, since EVALIDator has no per-species invasive
 attribute to diff against in the first place.
 
+## Findings
+
+### `invasive()` shares `vegStruct()`'s `mergeSmallStrata()` `AREA_TOTAL` inflation under `SMA`/`LMA`/`EMA` (confirmed 2026-09-15, not fixed)
+
+`invasive()`'s upstream `db$PLOT` restriction (`INVASIVE_SAMPLING_STATUS_CD %in% 1:2`,
+`invasiveStarter.R` line 60) is the identical P2-ancillary-protocol pre-filter pattern as
+`vegStruct()`'s `P2VEG_SAMPLING_STATUS_CD`, run through the identical
+`handlePops()`/`mergeSmallStrata()`/`sumToEU()` machinery (see `vegStruct.md`'s `AREA_TOTAL` section
+for the full root-cause writeup). Per this report's own "Methodology"/"Results" above, only **RI** is
+a genuinely restricted state for `invasive()` (6 of 132 forest plots) -- NC/CO's invasive-sampled
+universe matched `tpa()`'s unrestricted plot count exactly, so RI is the state where the same defect
+would be expected to show up, mirroring `vegStruct()`'s RI/NC.
+
+Confirmed present: `invasive(db_ri, method = 'TI')$AREA_TOTAL` = 17,310.84 (exact match to
+`vegStruct()`'s RI figure and to EVALIDator, since both restrict to essentially the same tiny
+P2-ancillary RI subset); `method = 'SMA'` gives 62,965.45 -- a 3.6x inflation, smaller in magnitude
+than `vegStruct()`'s NC case (1447x) but the identical mechanism: instrumenting
+`mergeSmallStrata()` directly shows every `(ESTN_UNIT_CN, INVYR)` cell in RI's invasive-restricted
+design has only 1-2 of the design's 7 real strata present, yet `sumStratWgt` (the renormalized
+present-stratum weight) is exactly 1.0 in every one -- silently boosting the 1-2 present strata to
+represent the entire estimation unit's area each year, same as `vegStruct()`. `nPlots_AREA` is
+identical between `TI` and `SMA` (6, both), confirming no new data is being incorporated despite the
+3.6x jump.
+
+**Not fixed here** -- root cause and remedy are shared with `vegStruct()`'s open item; see
+`vegStruct.md` for the full mechanism and proposed fix options. `invasive()`'s non-TI method
+validation is blocked on the same fix landing in `mergeSmallStrata()`.
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population estimate exactly (only order-of-magnitude
   agreement was checked, given the extra stratification/adjustment-factor weighting in the population
   branch that `byPlot` intentionally omits, same limitation as every other estimator's `byPlot` output).
 - `method` options other than `'TI'` (no EVALIDator equivalent; internal-consistency-only checks per
-  the plan, not yet added).
+  the plan, not yet added) -- blocked on the `mergeSmallStrata()` fix above (see "Findings").
 - A full national audit of `REF_PLANT_DICTIONARY` coverage (only the four states already downloaded
   for this validation pass were checked).

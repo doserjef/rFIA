@@ -222,3 +222,140 @@ test_that("standStruct() handles an empty areaDomain without warning", {
   )
   expect_equal(nrow(out), 0)
 })
+
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, totals/per-acre plumbing holds regardless of method, and
+# the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md for the full writeup of why).
+# See tests/testthat/test-util.R for the underlying maWeights()/
+# filterAnnual()/combineMR() unit-level checks these per-function tests
+# build on, and tpa.md "Fixed" #6 for a package-wide combineMR()/ANNUAL bug
+# found and fixed during area()'s non-TI pass -- standStruct() shares the
+# same combineMR() call site and was unaffected by the time this section
+# was written (already fixed at the shared-utility level).
+#
+# AREA_TOTAL (the same for every STAGE row within a given YEAR/group, since
+# standStruct() shares area()'s exact area machinery -- see standStruct.md)
+# is used for the EMA/SMA convergence and TI-vs-SMA bounded-agreement
+# checks below, not COVER_PCT: COVER_PCT is a per-category proportion split
+# across 4 rows, and a rare STAGE category could have a small, noisy
+# denominator-relative value not suited to a relative-tolerance bound.
+# standStruct() has no treeDomain/bySpecies (only landType/areaDomain, like
+# area()/carbon()), so the domain-filter check below mirrors area.md's
+# areaDomain + grpBy pattern.
+
+# Test 16 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI), using AREA_TOTAL.
+# Never exactly equal (see test-util.R for why the exact boundary is
+# degenerate) -- this checks the trend, not a fixed-tolerance snapshot.
+test_that("standStruct() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- unique(as.data.frame(standStruct(db_ri, totals = TRUE, method = 'SMA'))$AREA_TOTAL)
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- unique(as.data.frame(standStruct(db_ri, totals = TRUE, method = 'EMA', lambda = lam))$AREA_TOTAL)
+    abs(ema - sma)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 100)
+})
+
+# Test 17 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general (see
+# tpa.md). Reusing the same flat 10% relative tolerance established
+# empirically there (panel plot-count CV is a property of each state's
+# panel structure, not the estimator; AREA_TOTAL here is identical to
+# area()'s own AREA_TOTAL, since both share the same area machinery, so the
+# same -0.65%/0.76%/-2.15%/-4.98% relative diffs already measured in
+# area.md apply unchanged).
+for (st in states) {
+  test_that(paste("standStruct() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- unique(as.data.frame(standStruct(dbs[[st]], totals = TRUE, method = 'TI'))$AREA_TOTAL)
+    sma <- unique(as.data.frame(standStruct(dbs[[st]], totals = TRUE, method = 'SMA'))$AREA_TOTAL)
+    expect_equal(sma, ti, tolerance = 0.10)
+  })
+}
+
+# Test 18 ------------------------------
+# standStruct()'s own internal identity (Test 8 above, TI-only) re-checked
+# under every non-TI method: COVER_PCT sums to exactly 100% -- checked *per
+# YEAR*, since method = 'ANNUAL' returns one row per sampled panel-year per
+# STAGE. Also re-checks the totals-vs-per-acre identity (Test 9) under
+# every non-TI method.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("standStruct() COVER_PCT sums to 100% under method =", m, "(", st, ")"), {
+      out <- as.data.frame(standStruct(dbs[[st]], method = m))
+      byYear <- aggregate(COVER_PCT ~ YEAR, data = out, sum)
+      expect_equal(byYear$COVER_PCT, rep(100, nrow(byYear)), tolerance = 1e-6)
+    })
+
+    test_that(paste("standStruct() totals are consistent with per-acre estimates under method =", m, "(", st, ")"), {
+      out <- as.data.frame(standStruct(dbs[[st]], totals = TRUE, method = m))
+      expect_equal(out$STAGE_AREA_TOTAL / out$AREA_TOTAL * 100, out$COVER_PCT, tolerance = 1e-9)
+    })
+  }
+}
+
+# Test 19 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error.
+test_that("standStruct() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(standStruct(db_ri, method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'STAGE', 'PROP_STAGE') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 20 ------------------------------
+# areaDomain + grpBy interaction under every non-TI method: the filter must
+# still restrict (or, in a legitimate edge case, exactly reproduce -- see
+# carbon.md's precedent) the unfiltered total, and grpBy = OWNGRPCD must
+# not silently drop it for any group -- checked *per YEAR*, since ANNUAL
+# returns multiple year-rows.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("standStruct() areaDomain survives grpBy under method =", m, "(", st, ")"), {
+      db_st <- dbs[[st]]
+      expect_no_warning({
+        base <- as.data.frame(standStruct(db_st, totals = TRUE, method = m))
+        filtered <- as.data.frame(standStruct(db_st, areaDomain = PHYSCLCD %in% 21:29,
+                                              totals = TRUE, method = m))
+        grouped <- as.data.frame(standStruct(db_st, areaDomain = PHYSCLCD %in% 21:29,
+                                             grpBy = OWNGRPCD, totals = TRUE, method = m))
+      })
+      baseYr <- aggregate(AREA_TOTAL ~ YEAR, data = unique(base[, c("YEAR", "AREA_TOTAL")]), sum)
+      filtYr <- aggregate(AREA_TOTAL ~ YEAR, data = unique(filtered[, c("YEAR", "AREA_TOTAL")]), sum)
+      mergedBase <- merge(filtYr, baseYr, by = "YEAR", suffixes = c("_filt", "_base"))
+      expect_true(all(mergedBase$AREA_TOTAL_filt <= mergedBase$AREA_TOTAL_base))
+
+      groupedUniq <- unique(grouped[, c("YEAR", "OWNGRPCD", "AREA_TOTAL")])
+      grpYr <- aggregate(AREA_TOTAL ~ YEAR, data = groupedUniq, sum)
+      mergedGrouped <- merge(grpYr, filtYr, by = "YEAR", suffixes = c("_grp", "_filt"))
+      expect_equal(nrow(mergedGrouped), nrow(baseYr))
+      expect_equal(mergedGrouped$AREA_TOTAL_grp, mergedGrouped$AREA_TOTAL_filt, tolerance = 1e-3)
+    })
+  }
+}
+
+# Test 21 ------------------------------
+# Plain default-args smoke tests, one per state, for EMA and ANNUAL. ANNUAL
+# is regression coverage for the combineMR()/ANNUAL pooling bug found and
+# fixed during area()'s non-TI pass (tpa.md, "Fixed" #6) -- standStruct()
+# shares the same combineMR() call site, so a returned multi-year (not
+# pooled) result here confirms the fix covers it too. EMA mirrors
+# tpa.md's v1.1.1 regression coverage.
+for (st in states) {
+  test_that(paste("standStruct() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(standStruct(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+
+  test_that(paste("standStruct() runs with method = 'ANNUAL' and default arguments, multiple years (", st, ")"), {
+    expect_no_error(out <- as.data.frame(standStruct(dbs[[st]], method = 'ANNUAL')))
+    expect_s3_class(out, "data.frame")
+    expect_gt(length(unique(out$YEAR)), 1) # not pooled into a single mislabeled year
+  })
+}

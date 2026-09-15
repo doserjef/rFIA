@@ -472,11 +472,14 @@ using synthetic data shaped to match a real captured call from `tpa(fiaRI, metho
    (reproduces identically on the pre-fix code) and unrelated to either fix in this report (`SMA`
    touches neither the `EMA`-only `lambda` validation nor `filterAnnual()`, which only runs for
    `method = 'ANNUAL'`). Out of scope for this report; deferred to the `vegStruct()` non-TI validation
-   pass (Phase 2 of the plan).
+   pass (Phase 2 of the plan). **[FIXED — see `vegStruct.md`, "Fixed", during `vegStruct()`'s own
+   non-TI pass]**: root-caused to `mergeSmallStrata()` (`R/util.R`), a shared utility, not anything
+   specific to `vegStruct()`.
 
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population estimate for the TI/default case (only
   totals-vs-per-acre was checked for TI; non-TI + byPlot was checked structurally above but not for
   numeric aggregation-reproduces-population-estimate).
-- Finding #2 above (`vegStruct(method = 'SMA')` error) — root cause not yet investigated.
+- ~~Finding #2 above (`vegStruct(method = 'SMA')` error) — root cause not yet investigated.~~ Fixed
+  during `vegStruct()`'s own non-TI pass — see `vegStruct.md`.

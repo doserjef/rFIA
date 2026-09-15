@@ -173,6 +173,15 @@ Full details on this validation are provided in the development version of `rFIA
   `volume()`, `dwm()`, `invasive()`, `seedling()`, `standStruct()`, and `diversity()`; see below), and
   an `areaDomain`/`landType` restriction matching no data could produce a spurious result instead of a
   clean empty one. Point estimates and sampling errors were not affected by either fix.
++ Fixed a bug where `method = 'SMA'`/`'LMA'`/`'EMA'`/`'ANNUAL'` could error with `"replacement has
+  length zero"` instead of returning a result (or the existing "bad stratification" warning, when a
+  stratum is genuinely too small to merge). This is not specific to `vegStruct()`: the underlying
+  shared utility that pools too-small strata together (`R/util.R`, used by every `sumToEU()`-based
+  estimator) picked a stratum's cross-year merge partner without accounting for a stratum whose
+  `INVYR` is unknown -- reachable whenever a function restricts its plot universe before computing
+  population weights (as `vegStruct()` and `invasive()` do, for their P2-ancillary-protocol sampling
+  restrictions), which leaves some strata with no real year of their own. `tpa()`/`area()`/etc., which
+  don't restrict their plot universe this way, were confirmed unaffected -- their output is unchanged.
 
 ### `diversity()`
 

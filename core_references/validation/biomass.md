@@ -184,6 +184,53 @@ woodland-form species so no discrepancy exists there regardless. Extending the t
 sampling error and plot-count columns for every `component` variant (not just the core default
 case) is what surfaced it.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `biomass()`'s output behaves sanely and
+consistently with the already-validated TI estimates wherever the documentation actually claims a
+relationship. See `tests/testthat/test-util.R` for the underlying unit-level checks on this shared
+machinery, and `tpa.md` (the template this section follows, and which `biomass()`'s output shape
+closely mirrors -- a single per-acre ratio column plus `totals = TRUE` support) for the full non-TI
+methodology and the two invariants that must not be over-asserted. `tpa.md`'s "Fixed" #6 documents a
+package-wide `combineMR()`/`ANNUAL` bug found and fixed during `area()`'s non-TI pass; `biomass()`
+shares the same call site (`R/biomass.R`) and was already covered by that fix before this section was
+written, confirmed below by a clean multi-row `ANNUAL` smoke test -- no new bug found this pass.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI)**: `|EMA_BIO_ACRE - SMA_BIO_ACRE|` shrinks monotonically as lambda
+  increases (2.57 → 0.21 → 0.012 → 0.001 for lambda = 0.5/0.9/0.99/0.999) — **pass**, confirms the same
+  limiting relationship already established in `tpa.md` holds at the `biomass()` output level too.
+- **TI vs. SMA bounded agreement, 4 states**: reusing the flat 10% relative tolerance established
+  empirically in `tpa.md` (panel plot-count CV is a property of each state's panel structure, not the
+  estimator, so it applies unchanged here):
+
+  | State | TI BIO_ACRE | SMA BIO_ACRE | Relative diff |
+  |---|---|---|---|
+  | RI | 77.0650 | 77.1650 | 0.13% |
+  | NC | 71.0735 | 68.0236 | −4.29% |
+  | CO | 27.0924 | 27.5926 | 1.85% |
+  | OR | 74.6529 | 79.3846 | 6.34% |
+
+  All four states land within the 10% bound — **pass** in all four.
+- **Totals-vs-per-acre consistency under SMA/LMA/EMA/ANNUAL, 4 states**: `BIO_TOTAL / AREA_TOTAL ==
+  BIO_ACRE` to `1e-9` tolerance in all 16 state × method combinations — **pass**. The totals/per-acre
+  plumbing is not TI-specific.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 129 per-plot rows (not a
+  population-level estimate), confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this
+  combination — **pass**.
+- **Domain filter (`treeDomain = DIA >= 20`, `areaDomain` mesic) + `bySpecies` under each of
+  SMA/LMA/EMA/ANNUAL, 4 states**: no errors, no warnings, non-negative `BIO_ACRE` in all 16
+  combinations — **pass**. Re-runs the same historically-buggy filter/grpBy interaction pattern from
+  the TI validation (Test 15 above) under every non-TI method.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`.
+- **`method = 'ANNUAL'` with default arguments, 4 states**: runs without error and returns multiple
+  distinct-year rows (not pooled) in all four — **pass**. Confirms `biomass()` is unaffected by the
+  `combineMR()` bug described above (already fixed by the time this pass began).
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population estimate (only totals-vs-per-acre was
@@ -191,7 +238,5 @@ case) is what surfaced it.
   not reconciled to the population estimate via the stratified estimator, same as the `tpa()` pass).
 - `treeType = 'gs'` has no direct EVALIDator "current stock" biomass equivalent (see "Component-to-
   attribute mapping" above) -- only structural coverage exists (pre-existing `test-biomass.R` Test 2).
-- `method` options other than `'TI'` (EVALIDator has no equivalent; these need
-  internal-consistency-only checks per the plan, not yet added).
 - `bySizeClass` was only checked structurally (pre-existing `test-biomass.R` Test 6), not against an
   EVALIDator size-class breakdown.

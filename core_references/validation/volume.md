@@ -172,6 +172,56 @@ otherwise-real, tallied tree. This was confirmed by inspecting the SQL metadata 
 `EVALIDATOR_POP_ESTIMATE.csv` for both families of attributes before implementing the fix, per the
 project's bug-handling protocol.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `volume()`'s output behaves sanely and
+consistently with the already-validated TI estimates wherever the documentation actually claims a
+relationship. See `tests/testthat/test-util.R` for the underlying unit-level checks on this shared
+machinery, and `tpa.md` (the template this section follows, and which `volume()`'s output shape
+closely mirrors -- per-acre ratio columns, `totals = TRUE`, and `bySpecies` support, just three
+metrics instead of one) for the full non-TI methodology and the two invariants that must not be
+over-asserted. `tpa.md`'s "Fixed" #6 documents a package-wide `combineMR()`/`ANNUAL` bug found and
+fixed during `area()`'s non-TI pass; `volume()` shares the same call site (`R/volume.R`) and was
+already covered by that fix before this section was written, confirmed below by a clean multi-row
+`ANNUAL` smoke test -- no new bug found this pass.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI)**: `|EMA_BOLE_CF_ACRE - SMA_BOLE_CF_ACRE|` shrinks monotonically as
+  lambda increases (108.2 → 8.1 → 0.46 → 0.04 for lambda = 0.5/0.9/0.99/0.999) — **pass**, confirms
+  the same limiting relationship already established in `tpa.md` holds at the `volume()` output level
+  too.
+- **TI vs. SMA bounded agreement, 4 states**: reusing the flat 10% relative tolerance established
+  empirically in `tpa.md` (panel plot-count CV is a property of each state's panel structure, not the
+  estimator, so it applies unchanged here):
+
+  | State | TI BOLE_CF_ACRE | SMA BOLE_CF_ACRE | Relative diff |
+  |---|---|---|---|
+  | RI | 2545.377 | 2546.108 | 0.03% |
+  | NC | 2727.280 | 2587.498 | −5.13% |
+  | CO | 1035.158 | 1063.746 | 2.76% |
+  | OR | 3670.365 | 3886.464 | 5.89% |
+
+  All four states land within the 10% bound — **pass** in all four.
+- **Totals-vs-per-acre consistency under SMA/LMA/EMA/ANNUAL, 4 states, all three metrics**:
+  `BOLE_CF_TOTAL`/`SAW_CF_TOTAL`/`SAW_MBF_TOTAL` divided by `AREA_TOTAL` reproduce
+  `BOLE_CF_ACRE`/`SAW_CF_ACRE`/`SAW_MBF_ACRE` to `1e-9` tolerance in all 16 state × method
+  combinations — **pass**. The totals/per-acre plumbing is not TI-specific.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 129 per-plot rows (not a
+  population-level estimate), confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this
+  combination — **pass**.
+- **Domain filter (`treeDomain = DIA >= 20`, `areaDomain` mesic) + `bySpecies` under each of
+  SMA/LMA/EMA/ANNUAL, 4 states**: no errors, no warnings, non-negative `BOLE_CF_ACRE` in all 16
+  combinations — **pass**. Re-runs the same historically-buggy filter/grpBy interaction pattern from
+  the TI validation (Test 14 above) under every non-TI method.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four — **pass**,
+  same v1.1.1 regression coverage as `tpa.md`.
+- **`method = 'ANNUAL'` with default arguments, 4 states**: runs without error and returns multiple
+  distinct-year rows (not pooled) in all four — **pass**. Confirms `volume()` is unaffected by the
+  `combineMR()` bug described above (already fixed by the time this pass began).
+
 ## Deferred to follow-up (not covered this pass)
 
 - `byPlot = TRUE` aggregation reproducing the population estimate (only totals-vs-per-acre was
@@ -180,5 +230,3 @@ project's bug-handling protocol.
   an EVALIDator size-class breakdown.
 - `volType = 'GROSS'`/`'SOUND'` were not numerically validated against EVALIDator's gross/sound
   attributes this pass (only `volType = 'NET'`, the default).
-- `method` options other than `'TI'` (EVALIDator has no equivalent; internal-consistency-only checks
-  per the plan, not yet added).
