@@ -870,7 +870,6 @@ mergeSmallStrata <- function(db, pops) {
 # For annual estimator, we use the most recent stratification for all years.
 # Otherwise we won't be able to compute the covariance between panels, because
 # stratum boundaries and assignments differ from year to year.
-# TODO:
 annualStrataHelper <- function(db, pops) {
 
 
@@ -1094,7 +1093,6 @@ annualStrataHelper <- function(db, pops) {
 }
 
 
-# TODO: 
 ## Moving average weights
 maWeights <- function(pops, method, lambda){
 
@@ -1202,39 +1200,6 @@ combineMR <- function(x, method){
   return(out)
 }
 
-# TODO: should just be able to delete this. 
-# Make implicit NA explicit for spatial summaries
-prettyNamesSF <- function (tOut, polys, byPlot, grpBy, grpByOrig, tNames, returnSpatial) {
-
-  # Return a spatial object
-  if (!is.null(polys) & byPlot == FALSE) {
-    ## NO IMPLICIT NA
-    nospGrp <- unique(grpBy[grpBy %in% c('SPCD', 'SYMBOL', 'COMMON_NAME', 'SCIENTIFIC_NAME') == FALSE])
-    nospSym <- dplyr::syms(nospGrp)
-    tOut <- tidyr::complete(tOut, !!!nospSym)
-    # If species, we don't want unique combos of variables related to same species
-    # but we do want NAs in polys where species are present
-    if (length(nospGrp) < length(grpBy)){
-      spGrp <- unique(grpBy[grpBy %in% c('SPCD', 'SYMBOL', 'COMMON_NAME', 'SCIENTIFIC_NAME')])
-      spSym <- dplyr::syms(spGrp)
-      tOut <- tidyr::complete(tOut, tidyr::nesting(!!!nospSym))
-    }
-
-    suppressMessages({suppressWarnings({
-      tOut <- dplyr::left_join(tOut, polys) %>%
-        dplyr::select(c('YEAR', grpByOrig, tNames, names(polys))) %>%
-        dplyr::filter(!is.na(polyID))})})
-
-    # Makes it horrible to work with as a dataframe
-    if (returnSpatial == FALSE) tOut <- dplyr::select(tOut, -c(geometry))
-  } else if (!is.null(polys) & byPlot){
-    polys <- as.data.frame(polys)
-    tOut <- dplyr::left_join(tOut, dplyr::select(polys, -c(geometry)), by = 'polyID')
-  }
-
-  return(tOut)
-}
-
 # A single panel (INVYR) is often a constituent of more than one FIA
 # evaluation's multi-panel window -- e.g. RI's 2013 evaluation covers panels
 # 2009-2013, and its 2014 evaluation covers panels 2009-2014, so panel 2009
@@ -1316,51 +1281,6 @@ skewness <- function(x, na.rm = TRUE){
   return(skew)
 }
 
-# TODO: 
-projectPnts <- function(x, y, slope = NULL, yint = NULL){
-  if (is.null(slope)){
-    P = data.frame(xOrig = x, yOrig = y)
-    P$x <- (P$yOrig+P$xOrig) / 2
-    P$y <- P$x
-  } else {
-    P = data.frame(x, y)
-    P$m <- slope
-    P$n <- yint
-    ## Perp Points
-    P$x1 = P$x + -slope
-    P$y1 = P$y + 1
-    ## Perp Line
-    P$m1 = (P$y1-P$y)/(P$x1-P$x)
-    P$n1 = P$y - P$m1*P$x
-    ## Line intersection
-    P$x=(P$n1-P$n)/(P$m-P$m1)
-    P$y=P$m*P$x+P$n
-  }
-  return(P)
-}
-
-# TODO: 
-projectPoints <- function(x, y, slope = 1, yint = 0, returnPoint = TRUE){
-  ## Solve for 1:1 line by default
-
-  ## So where does y = mx and y = -1/m * x + b converge
-  perp_slope <-  - 1 / slope
-  ## Solve for c given x and y
-  perp_int <- -perp_slope*x + y
-
-  ## Set equations equal to each other on y
-  ## -1/m*x + b = mx
-  xproj <- (perp_int - yint) / (slope + -perp_slope)
-  yproj <- slope * xproj + yint
-
-  if (returnPoint){
-    out <- data.frame(x = xproj, y = yproj)
-  } else {
-    out <- sqrt((xproj^2) + (yproj^2))
-    out <- dplyr::if_else(xproj < 0, -out, out)
-  }
-  return(out)
-}
 
 # TODO: 
 #### SHANNON'S EVENESS INDEX (H)
