@@ -10,7 +10,7 @@ Pure R, no compiled code (no `src/`).
 
 ## Design Approach
 
-- All joins and database logic should adhere to the most recent FIA database documentation found [here](https://research.fs.usda.gov/understory/forest-inventory-and-analysis-database-user-guide-nfi) and in the FIA population estimation guide found at `core_references/fia_pop_estimation_user_guide.pdf`.  
+- All joins and database logic should adhere to the most recent FIA database documentation found at `core_references/fiadb_user_guide_aug_2025.pdf` and in the FIA population estimation guide found at `core_references/fia_pop_estimation_user_guide.pdf`.  
 - All estimation functions should follow the statistical post-stratified estimators described in `core_references/bechtoldFIA.pdf` and `core_references/westfall2022USDA.pdf`. 
 - Estimates must match FIA EVALIDator tool when using the temporally indifferent estimation method.
 

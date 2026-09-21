@@ -125,10 +125,9 @@ invasiveStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
   db <- udAreaDomain(db, areaDomain)
 
   # Handle population tables ----------------------------------------------
-  # Filtering out all inventories that are not relevant to the current
-  # estimation type. If using estimator other than TI, handle the differences in
+  # If using estimator other than TI, handle the differences in
   # P2POINTCNT and in assigning YEAR column (YEAR = END_INVYR if method = 'TI')
-  pops <- handlePops(db, evalType = c('CURR'), method, mr, pltList = db$PLOT$PLT_CN)
+  pops <- handlePops(db, evalType = c('CURR'), method, mr)
 
   # A lot of states do their stratification in such a way that makes it impossible
   # to estimate variance of annual panels with the post-stratified estimator. That is,
