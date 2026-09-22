@@ -224,33 +224,10 @@ estimation bug, so no test/NEWS.md entry, but corrected directly in `man/diversi
 
 ## Findings
 
-### Checked for `vegStruct()`/`invasive()`'s `mergeSmallStrata()` `AREA_TOTAL`-inflation bug under `SMA` -- confirmed clean (2026-09-15)
-
-`vegStruct()`/`invasive()` both showed a `mergeSmallStrata()` (`R/util.R`) defect where `AREA_TOTAL`
-under `method = 'SMA'`/`'LMA'`/`'EMA'` is silently inflated toward the full unrestricted forest area,
-with a falsely tight SE, whenever `db$PLOT` has been pre-filtered to a P2-ancillary protocol
-subsample before `handlePops()` runs (see `vegStruct.md`'s `AREA_TOTAL` section for the full
-mechanism). `diversity()` was checked as a candidate given its shared "no EVALIDator ground truth,
-P2/P3-adjacent" profile with those two functions -- **confirmed absent, and structurally cannot
-occur**, not merely untested: `diversityStarter.R` has no `db$PLOT` filter of any kind beyond the
-routine MR-clip `prev == 0` step (confirmed via `grep`); it draws its population through
-`evalType = 'VOL'` (EXPVOL), the standard, full-population tree/volume evaluation (NC: 5,674 plots,
-essentially the same universe as CURR), not a manual post-hoc plot-list restriction. `handlePops()`'s
-`PLT_CN` -> `INVYR` join therefore never produces an `INVYR = NA` row (confirmed: zero, vs. genuine
-ones for `vegStruct()`/`invasive()`), and instrumenting `mergeSmallStrata()` directly shows the
-ordinary per-year stratum-coverage pattern (4-6 of ~5-6 real strata present in nearly every
-`(ESTN_UNIT, INVYR)` cell) rather than the pathological "1-2 of 5+, every year" pattern the bug
-requires. Confirmed numerically on NC: `AREA_TOTAL` under `TI` = 18,509,817 (exact match to `area()`'s
-already-validated figure) vs. `SMA` = 18,650,929 -- ~0.8% apart, with `AREA_TOTAL_SE` widening from
-0.64% to 1.26% (a small, plausible change, not the suspicious *tightening* the buggy case shows).
-Full derivation (also covering `dwm()`, the other confirmed-clean candidate) lives in `vegStruct.md`.
-
 ## Deferred to follow-up (not covered this pass)
 
 - `method` options other than `'TI'` (no EVALIDator equivalent; internal-consistency-only checks per
-  the plan, not yet added) -- the `mergeSmallStrata()` concern that blocks this for `vegStruct()`/
-  `invasive()` does not apply here (see "Findings" above), so this is a plain not-yet-started item,
-  not a blocked one.
+  the plan, not yet added).
 - `byPlot = TRUE` aggregating to reproduce the population-level estimate exactly (only the specific
   hand-calculated/regression-tested plot above was checked).
 - A broader audit of other `grpBy`/`stateVar`/`grpVar` combinations (e.g. a custom `stateVar` like

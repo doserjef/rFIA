@@ -1282,7 +1282,6 @@ skewness <- function(x, na.rm = TRUE){
 }
 
 
-# TODO: 
 #### SHANNON'S EVENESS INDEX (H)
 #
 # speciesObs: vector of observations (species or unique ID)
@@ -1524,23 +1523,22 @@ ratioVar <- function(x, y, x.var, y.var, cv) {
   return(r.var)
 }
 
-# TODO: 
 sumToPlot <- function(x,
                       pops,
                       grpBy) {
 
-  ## Convert to syms so we can use in dplyr functions
+  # Convert to syms so we can use in dplyr functions
   grp.syms <- syms(grpBy)
 
-  ## Sum x variable(s) up to plot-level
+  # Sum x variable(s) up to plot-level
   if ('TREE_BASIS' %in% names(x)) {
 
-    ## Allows us to use across in summary functions
+    # Allows us to use across in summary functions
     x.vars <- syms(names(x)[!c(names(x) %in% c('PLT_CN', 'TREE_BASIS',
                                                'CONDID', 'SUBP', 'TREE', 'ONEORTWO',
                                                grpBy))])
 
-    ## Sum up to plot
+    # Sum up to plot
     x <- x %>%
       dtplyr::lazy_dt() %>%
       # Plots/conditions with no qualifying tree carry a phantom
@@ -1621,7 +1619,6 @@ sumToPlot <- function(x,
   return(x)
 }
 
-# TODO: 
 sumToEU <- function(db,
                     x,
                     y = NULL,
@@ -1776,7 +1773,7 @@ sumToEU <- function(db,
         dplyr::left_join(wgts, by = joinCols) %>%
         dplyr::mutate(dplyr::across(c(!!!x.var.m.syms), ~(.x * wgt))) %>%
         dplyr::mutate(dplyr::across(c(!!!x.var.v.syms, !!!x.var.c.syms), ~(.x * (wgt^2)))) %>%
-        dplyr::group_by(ESTN_UNIT_CN, P2PNTCNT_EU, !!!x.grp.syms) %>%
+        dplyr::group_by(ESTN_UNIT_CN, !!!x.grp.syms) %>%
         dplyr::summarize(dplyr::across(c(!!!x.var.m.syms, !!!x.var.v.syms, !!!x.var.c.syms, nPlots.x), \(x) sum(x, na.rm = TRUE)))
       yEU <- yEU %>%
         dplyr::left_join(dplyr::select(db$POP_ESTN_UNIT, CN, STATECD), by = c('ESTN_UNIT_CN' = 'CN')) %>%
@@ -1870,7 +1867,7 @@ sumToEU <- function(db,
         dplyr::left_join(wgts, by = joinCols) %>%
         dplyr::mutate(dplyr::across(c(!!!x.var.m.syms), ~(.x * wgt))) %>%
         dplyr::mutate(dplyr::across(c(!!!x.var.v.syms), ~(.x * (wgt^2)))) %>%
-        dplyr::group_by(ESTN_UNIT_CN, P2PNTCNT_EU, !!!x.grp.syms) %>%
+        dplyr::group_by(ESTN_UNIT_CN, !!!x.grp.syms) %>%
         dplyr::summarize(dplyr::across(c(!!!x.var.m.syms, !!!x.var.v.syms, nPlots.x), \(x) sum(x, na.rm = TRUE))) %>%
         dplyr::ungroup()
 

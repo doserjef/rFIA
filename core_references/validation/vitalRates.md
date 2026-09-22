@@ -399,6 +399,89 @@ matches the unrestricted `BA_GROW_AC`/`NETVOL_GROW_AC`/`BIO_GROW_AC` (population
 `BAA_GROW`/`NETVOL_GROW_AC`/`BIO_GROW_AC` (`byPlot = TRUE`) exactly. Full `test-vitalRates.R` suite
 re-run with no regressions.
 
+### 7. `sumToEU()`'s SMA/LMA/EMA collapse step grouped the numerator by `P2PNTCNT_EU`, a per-panel-varying column, causing a many-to-many join explosion under `method != 'TI'` [FIXED -- shared `R/util.R`, also affects `growMort()`]
+
+Found while starting this function's non-TI (`method`) validation pass (see "Non-TI method
+validation" below). `vitalRates(db_ri, method = 'SMA')` gave `BIO_GROW_AC = 2.51` against a `TI`
+value of `0.26` -- an ~860% inflation, wildly outside the ~5% TI-vs-SMA agreement documented for every
+other estimator in this initiative (`tpa.md`, `biomass.md`, `standStruct.md`). All four states showed
+the same pattern (RI +860%, NC +669%, CO +510%, OR +807%), and `nPlots_TREE` was inflated by roughly
+the same factor as the panel count (RI: 108 (`TI`) -> 708 (`SMA`), matching RI's 7 constituent panels,
+2019-2025) while `AREA_TOTAL`/`nPlots_AREA` were **not** inflated at all (RI: 369,928/109 for both `TI`
+and `SMA`) -- i.e. only the tree/growth side of the ratio was affected, not the area side.
+
+**Root cause**: `sumToEU()` (`R/util.R`) computes population estimates for a numerator ("x") and
+denominator ("y") in parallel. Under `method %in% c('SMA','LMA','EMA')`, after applying each panel's
+moving-average weight, both sides are supposed to collapse from one row per `(ESTN_UNIT_CN, INVYR)`
+panel down to one row per `(ESTN_UNIT_CN, YEAR)` by summing the weighted panel contributions together
+(`YEAR` is the shared reporting label across all panels in the window; `INVYR`, each panel's own year,
+has already been dropped from the grouping columns for exactly this reason a few lines earlier). The
+denominator's collapse (`R/util.R:1785`, `group_by(ESTN_UNIT_CN, !!!y.grp.syms) %>% summarize(...)`)
+does this correctly. The numerator's parallel collapse (`R/util.R:1778`, prior to this fix) additionally
+grouped by `P2PNTCNT_EU` -- but for non-`TI` methods, `P2PNTCNT_EU` was reassigned earlier in the same
+function (`R/util.R:1641`, `pops$P2PNTCNT_EU <- pops$P2PNTCNT_EU_INVYR`) to the *panel-specific* plot
+count, which legitimately differs from panel to panel. Grouping by a column that varies per panel
+defeats the very collapse the `group_by()` is meant to perform: each panel's weighted row survives as
+its own group instead of being summed into the others, so the numerator side silently stayed at one row
+per panel (`x` nrow = 12 for RI's 2 estimation units x ~6 panels each) while the denominator correctly
+collapsed to one row per estimation unit (`y` nrow = 2). The identical asymmetry exists in the parallel
+"no `y`" branch of `sumToEU()` used when a variable has no separate denominator (`R/util.R:1872`).
+
+This asymmetry was invisible for every previously-validated `sumToEU()`-based estimator (`tpa()`,
+`area()`, `biomass()`, `volume()`, `carbon()`, `dwm()`, `standStruct()`, `diversity()`, etc.): each of
+those calls `sumToEU()` exactly once per estimate, and the dispatcher's own final
+`group_by(YEAR, ...) %>% summarize(across(everything(), sum))` step (e.g. `R/tpa.R`) sums the
+not-yet-collapsed rows together anyway, since they all still carry the same `YEAR` label -- the totals
+come out correct by coincidence, the bug just means `sumToEU()` itself does less work than its own
+code implies. But `vitalRatesStarter.R` (and, identically, `growMortStarter.R`) calls `sumToEU()` a
+**second** time on the same tree list (with `tPlot`/`pPlot` selected out) to get a covariance term
+needed for `ratioVar()`'s per-stem (not per-acre) variance formula, then `left_join()`s that second
+call's output onto the first call's output by `(ESTN_UNIT_CN, grpBy)` (`grpBy` containing only `YEAR`
+in the default case). Since **both** un-collapsed outputs share the same `(ESTN_UNIT_CN, YEAR)` key
+across all their panel-rows, this `left_join()` is a genuine many-to-many join: every one of a state's
+~6-10 panel-rows in the first call matches every one of that same state's ~6-10 panel-rows in the
+second call, squaring the row count (RI: 12 -> 74) and inflating every downstream sum
+(`BIO_TOTAL`, `TREE_TOTAL`, hence `BIO_GROW_AC`, etc.) by roughly the panel count. `customPSE()` has two
+`sumToEU()` call sites but only ever executes one of them per dispatch (an `if (!is.null(y)) {...} else
+{...}` branch, not a sequence), so it never joins two un-collapsed outputs together and was not exposed.
+This is a package-wide `R/util.R` latent defect surfaced only by `vitalRates()`'s
+(and `growMort()`'s) specific two-`sumToEU()`-call-plus-join pattern, in the same spirit as `tpa.md`'s
+"Fixed" #6 (`combineMR()`) and #5 (`filterAnnual()`) -- a shared-utility bug found while validating a
+specific function's non-`TI` path.
+
+**Fix**: removed `P2PNTCNT_EU` from the numerator's post-weighting `group_by()` in both of `sumToEU()`'s
+SMA/LMA/EMA branches (`R/util.R`, the `!is.null(y)` branch and the `y = NULL` branch), matching the
+denominator's already-correct pattern. Two one-token-narrower `group_by()` calls; no change to the
+weighting math itself, the strata-level computation, `TI`, or `ANNUAL` (`ANNUAL` never reaches this
+`group_by()` -- it takes a separate `filterAnnual()` branch that already returns one row per group by
+construction). Confirmed no `*Starter.R` file reads `P2PNTCNT_EU` off `sumToEU()`'s returned `x`/`tEst`
+object (only `y`/`aEst`'s `P2PNTCNT_EU_INVYR`-derived design fields are used further, and those are
+computed elsewhere in `handlePops()`/`mergeSmallStrata()`, not from this return value), so dropping it
+from the numerator's grouped output is safe.
+
+**Verification**: post-fix, `x`/`tEst` now correctly collapses to exactly 2 rows for RI (one per
+estimation unit, matching `y`/`aEst`), eliminating the many-to-many join. `BIO_GROW_AC` (`SMA`) now
+reads 0.31 (RI), 1.89 (NC), -0.30 (CO), 1.12 (OR) against `TI`'s 0.26/1.96/-0.28/1.11 -- relative
+differences of 18%/-4%/10%/1%, the same order of magnitude documented for every other estimator in this
+initiative (see "Non-TI method validation" below for why RI's 18% is not itself concerning).
+`nPlots_TREE` now matches `TI` exactly in all four states (RI 108=108, NC 3435=3435, CO 3559=3559, OR
+8860=8860) rather than being inflated ~6-10x. `growMort()` was spot-checked with the identical
+two-`sumToEU()`-call-plus-join pattern (`growMortStarter.R:704-716`, six total `sumToEU()` calls per
+estimate) and confirmed to have shown the same class of defect before this fix and sane
+(single-digit-percent) `TI`-vs-`SMA` agreement after it (`MORT_TPA`, all four states) -- `growMort()`
+has its own scheduled non-`TI` validation pass, so this is a spot-check confirming the shared fix
+covers it, not a full pass. `customPSE()` was confirmed byte-identical before/after (as expected --
+never exposed to the join-explosion pattern; the same latent per-`sumToEU()`-call defect existed there
+too, but its own final dispatcher-level summarize step already absorbed it). Full package test suite
+(all 18 estimator test files, `RFIA_VALIDATION_DATA` + live EVALIDator network) re-run with no
+regressions beyond small, pre-existing, unrelated OR live-data drift in `test-vitalRates.R`'s `TI`
+EVALIDator-comparison tests (Tests 13-16 -- see "Known issues" below; these predate this session and
+are confirmed unrelated since they only exercise the `TI` path, which never reaches the modified code).
+Regression tests added: `tests/testthat/test-vitalRates.R` Test 24 asserts `nPlots_TREE` under `SMA`
+matches `TI` exactly (a direct, cheap witness to this exact bug class) in all four states; Test 19's
+bounded-tolerance `TI`-vs-`SMA` check would also have failed hard pre-fix (RI's pre-fix difference was
+~9 combined standard errors from zero, vs. ~0.2 post-fix). `NEWS.md` entry added.
+
 ## Known issues and intentional divergences from EVALIDator
 
 ### A. `landType = 'timber'` over-counts `nPlots_AREA` by a small margin in macroplot-heavy states -- root-caused, kept intentionally (not a bug)
@@ -493,6 +576,70 @@ a naming/API-surface decision (which name is "correct," and whether changing eit
 change for existing users) rather than a numeric correctness issue, and outside this pass's
 bug-handling protocol (which covers numeric mismatches).
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()`/`sumToEU()` in `R/util.R`, used by every
+`sumToEU()`-based estimator) does what its own math says it does, and `vitalRates()`'s output behaves
+sanely and consistently with the already-validated `TI` estimates wherever the documentation actually
+claims a relationship. See `tests/testthat/test-util.R` for the underlying unit-level checks on this
+shared machinery, and `tpa.md` (the template this section follows) for the full non-`TI` methodology.
+A real, previously-unknown bug in the shared `sumToEU()` collapse step -- invisible in every prior
+function's validation pass, since it happens to be masked whenever an estimator calls `sumToEU()` only
+once -- was found and fixed during this pass; see "Fixed" #7 above for the full root-cause writeup.
+All results below are post-fix.
+
+### Results
+
+- **EMA(lambda → 1) vs. SMA (RI)**: `|EMA_BIO_GROW_AC - SMA_BIO_GROW_AC|` shrinks monotonically as
+  lambda increases (0.253 → 0.025 → 0.0019 → 0.0002 for lambda = 0.5/0.9/0.99/0.999) — **pass**,
+  confirms the same limiting relationship established in `tpa.md` holds at the `vitalRates()` output
+  level too (Test 18).
+- **TI vs. SMA bounded agreement, 4 states**: unlike `TPA`/`BAA`/`BIO_ACRE` (always positive, bounded
+  away from zero), `BIO_GROW_AC` is a *net* growth rate (ingrowth minus mortality/cut) that can
+  legitimately be small or near zero, so the flat 10% relative tolerance established in `tpa.md` is not
+  well suited here -- RI's `TI` estimate is small (0.26) with a correspondingly large SE (64%), so a
+  modest absolute difference translates into a large-looking relative one. Bounding the absolute
+  difference by 1.5x the *combined* sampling error of the two estimates
+  (`sqrt(SE_TI^2 + SE_SMA^2)`, the standard error of their difference under independence) instead:
+
+  | State | TI BIO_GROW_AC | SMA BIO_GROW_AC | Combined SE (abs) | \|diff\| / combined SE |
+  |---|---|---|---|---|
+  | RI | 0.2614 | 0.3097 | 0.242 | 0.20 |
+  | NC | 1.9620 | 1.8859 | 0.069 | 1.10 |
+  | CO | -0.2763 | -0.3036 | 0.032 | 0.85 |
+  | OR | 1.1146 | 1.1223 | 0.038 | 0.20 |
+
+  All four states land well within the 1.5x bound (max observed 1.10x, NC) — **pass** in all four.
+  This same check would have failed hard pre-fix (RI's pre-fix difference was ~9 combined SEs from
+  zero — see "Fixed" #7).
+- **`nPlots_TREE` under SMA matches TI exactly, 4 states**: RI 108=108, NC 3435=3435, CO 3559=3559, OR
+  8860=8860 — **pass**, and a direct regression witness for "Fixed" #7 (pre-fix these were inflated
+  ~6-10x). This equality is not a coincidence: `TI`'s static per-evaluation stratum weighting already
+  draws on every panel in the evaluation's remeasurement window (just weighted uniformly rather than by
+  a moving average), so `TI` and `SMA` share the same underlying plot universe for `vitalRates()` and
+  differ only in how each panel's contribution is weighted — unlike `tpa()`/`area()`, where `TI` really
+  does use only the most recent panel and `SMA` draws on a strictly larger plot set.
+- **Totals-vs-per-acre and totals-vs-per-stem consistency under SMA/LMA/EMA/ANNUAL, 4 states**:
+  `BA_TOTAL / AREA_TOTAL == BA_GROW_AC`, `BIO_TOTAL / AREA_TOTAL == BIO_GROW_AC`,
+  `BA_TOTAL / TREE_TOTAL == BA_GROW`, and `BIO_TOTAL / TREE_TOTAL == BIO_GROW`, all to `1e-9` tolerance,
+  in all 16 state × method combinations — **pass**. Note this check alone would *not* have caught
+  "Fixed" #7's bug: the dispatcher (`R/vitalRates.R`) derives both the ratio and its matching total from
+  the same (pre-fix, inflated) summed value, so the ratio identity held even while both sides were
+  wrong by the same inflation factor.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 111 per-plot rows (not a
+  population-level estimate), confirming `mergeSmallStrata()`'s `byPlot`-skip gate doesn't break this
+  combination — **pass**.
+- **Domain filter (`treeDomain = DIA >= 20`, `areaDomain` mesic) + `bySpecies` under each of
+  SMA/LMA/EMA/ANNUAL, 4 states**: no errors, no warnings, finite `BIO_GROW_AC` in all 16 combinations —
+  **pass**. Re-runs the same historically-buggy filter/grpBy interaction pattern from the `TI`
+  validation under every non-`TI` method.
+- **`method = 'EMA'`/`'ANNUAL'` with default arguments, 4 states**: both run without error in all four;
+  `ANNUAL` returns multiple distinct-panel rows (not pooled) in every state (RI 7, NC 8, CO 10, OR 10,
+  matching each state's own evaluation window) — **pass**. Confirms `vitalRates()` is unaffected by the
+  `combineMR()`/`ANNUAL` pooling bug documented in `tpa.md` "Fixed" #6 (`R/vitalRates.R` already passes
+  `method` through to `combineMR()`).
+
 ## Deferred to follow-up (not covered this pass)
 
 - ~~Known Issue A above (`landType = 'timber'` `nPlots_AREA` over-count in macroplot-heavy states) is
@@ -504,11 +651,14 @@ bug-handling protocol (which covers numeric mismatches).
   cross-check tests, matching `tpa.md`'s fallback for filters not meaningful nationally.
 - `byPlot = TRUE` aggregation reproducing the population-level estimate (only totals-vs-per-acre/
   per-stem internal consistency was checked, same as every prior pass).
-- `method` options other than `'TI'` (EVALIDator has no equivalent; internal-consistency-only checks
-  per the plan, not yet added).
+- ~~`method` options other than `'TI'` (EVALIDator has no equivalent; internal-consistency-only checks
+  per the plan, not yet added).~~ Done -- see "Non-TI method validation" above. Found and fixed a real,
+  package-wide `sumToEU()` bug (`R/util.R`, "Fixed" #7) in the process, also affecting `growMort()`.
 - `bySizeClass` was only checked structurally (pre-existing `test-vitalRates.R` coverage), not against
   an EVALIDator size-class breakdown.
 - The `BA_GROW_AC`/`BAA_GROW` naming inconsistency noted above -- needs a decision on which name is
   canonical before any fix.
 - The identical `SUBPTYP == 1` hardcoding in `growMortStarter.R` (see Fixed #3's "shared-risk note")
-  -- left untouched, since `growMort()` has its own scheduled validation pass.
+  -- left untouched, since `growMort()` has its own scheduled validation pass. Its non-`TI` methods were
+  spot-checked (not fully validated) as part of "Fixed" #7's verification above and confirmed to benefit
+  from the same shared fix.

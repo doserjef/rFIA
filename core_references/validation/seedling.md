@@ -162,6 +162,103 @@ seedlings on SUBP 3/CONDID 1 (149.9306), SUBP 3/CONDID 2 (149.9306), and SUBP 4/
 summing to `674.6875`; `seedling()`'s reported plot-level `TPA` for this plot/species now matches
 exactly (regression test added, see below). Full package test suite re-run with no regressions.
 
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: the shared weighting machinery
+(`maWeights()`/`filterAnnual()`/`combineMR()` in `R/util.R`, used by every `sumToEU()`-based
+estimator) does what its own math says it does, and `seedling()`'s output behaves sanely and
+consistently with the already-validated TI estimates wherever the documentation actually claims a
+relationship. See `tests/testthat/test-util.R` for the underlying unit-level checks on this shared
+machinery, and `tpa.md` (the template this section follows) for the full non-TI methodology.
+`tpa.md`'s "Fixed" #6 documents a package-wide `combineMR()`/`ANNUAL` bug found and fixed during
+`area()`'s non-TI pass; `seedling()` shares the same call site (`combineMR(tEst, method)` /
+`combineMR(aEst, method)` in `seedlingStarter.R`) and was already covered by that fix before this
+section was written (confirmed below, not just assumed).
+
+**`seedling()` cannot have the `mergeSmallStrata()` P2Veg-style area-inflation defect found in
+`vegStruct()`/`invasive()`.** That bug (see `vegStruct.md`'s `AREA_TOTAL` section) requires `db$PLOT`
+to be pre-restricted to a P2-ancillary protocol subsample (`P2VEG_SAMPLING_STATUS_CD`,
+`INVASIVE_SAMPLING_STATUS_CD`) before `handlePops()` runs, which leaves `INVYR = NA` rows in `pops`
+and a pathological 1-2-of-5+-strata-present coverage pattern for `mergeSmallStrata()` to mishandle.
+Confirmed by inspection (`grep` of `seedlingStarter.R`): `seedling()` applies no such filter to
+`db$PLOT` and draws its population through `evalType = 'VOL'` (EXPVOL, the standard full-population
+tree/volume evaluation), the same clean pattern already confirmed safe for `tpa()`/`diversity()` in
+`diversity.md`'s "Findings" section -- structurally identical to those two, not merely untested.
+
+### Results
+
+- **EMA(lambda -> 1) vs. SMA (RI)**: `|EMA_TPA - SMA_TPA|` shrinks monotonically as lambda increases
+  (328.84 -> 48.90 -> 4.30 -> 0.42 for lambda = 0.5/0.9/0.99/0.999) -- **pass**, confirms the
+  vignette's documented limiting relationship at the `seedling()` output level.
+- **TI vs. SMA bounded agreement, 4 states**: reuses the 10% relative tolerance established in
+  `tpa.md` (panel-count CV is a state/data property, not an estimator property, so it's not
+  recomputed per function -- same reuse `standStruct.md`/`carbon.md` already made).
+
+  | State | TI TPA | SMA TPA | Relative diff |
+  |---|---|---|---|
+  | RI | 575.16 | 549.92 | −4.39% |
+  | NC | 1230.53 | 1274.31 | +3.56% |
+  | CO | 1609.05 | 1589.36 | −1.22% |
+  | OR | 889.76 | 861.00 | −3.23% |
+
+  All four states land well within the 10% bound -- **pass**.
+- **Totals-vs-per-acre consistency under SMA/LMA/EMA/ANNUAL, 4 states**: `TREE_TOTAL / AREA_TOTAL ==
+  TPA` to `1e-9` tolerance in all 16 state x method combinations -- **pass**.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 132 per-plot rows (not a
+  population-level estimate) -- **pass**.
+- **Domain filter (`treeDomain = SPCD < 300`, `areaDomain` mesic) + `bySpecies` under each of
+  SMA/LMA/EMA/ANNUAL, 4 states**: no errors, no warnings, non-negative `TPA` in all 16 combinations
+  (4/16/15/30 rows for SMA/LMA/EMA respectively per state, up to 257 for OR's ANNUAL) -- **pass**.
+  Re-runs the historically-buggy filter/grpBy interaction from the TI validation (species-filter
+  checks above) under every non-TI method.
+- **`method = 'EMA'` with default arguments, 4 states**: runs without error in all four -- **pass**.
+- **`method = 'ANNUAL'` on a `clipFIA(mostRecent = TRUE)` db returns one row per real panel, not a
+  pooled row (NC, not RI -- see "RI's `SEEDLING` data lags its `TREE` data by one panel" below)**:
+  confirms `tpa.md`'s "Fixed" #6 `combineMR()` fix covers `seedling()`. NC's clipped `ANNUAL` output
+  returns 8 rows (2017-2024); the latest (2024: `TPA = 1227.72`, `nPlots_TREE = 605`) matches, to full
+  precision, the same year computed independently from the full unclipped NC history -- **pass**, no
+  re-pooling.
+
+### RI's `SEEDLING` data lags its `TREE` data by one panel (data-cache observation, not a bug)
+
+While setting up the `ANNUAL` regression check above, RI (used for every other check in this section
+and in the original EVALIDator pass) turned out not to be usable for it. `seedling(db_ri, method =
+'ANNUAL')` on the clipped db tops out at panel 2024, one year behind `tpa(db_ri, method = 'ANNUAL')`
+on the identical db, which reaches 2025 (RI's true most-recent, self-hosting panel). Confirmed via the
+raw, *unclipped* extract, independent of anything in this pass: all 40 plots measured in RI's 2025
+panel (`INVYR = 2025`) have **zero** matching rows in `SEEDLING`, not just zero seedlings recorded
+for every species -- i.e. the `SEEDLING` table itself has not yet been populated for that panel in the
+current local cache, while `TREE` has. This is the same class of issue as `dwm.md`'s "RI is excluded
+from every population-estimation check in this section" (FIA's phase-data publication for one table
+lagging behind the core evaluation cycle for another), just one panel-year rather than a whole
+evaluation. A knock-on effect: since RI's clipped-vs-full `ANNUAL` match is only guaranteed for a
+panel that is genuinely self-hosted by the db's most-recent evaluation (`tpa.md`'s "Fixed" #6 only
+claims this for the true latest year, not every row -- confirmed directly: even `tpa()`'s own 2024 row
+differs slightly between the clipped and full-history runs, only 2025 matches exactly), RI's
+seedling-data-lag-shifted "latest" row (2024) is *not* self-hosted and does **not** exactly match a
+standalone full-history computation (211.2554 vs. 211.1668 TPA, same `nPlots_TREE = 12` -- confirmed a
+`filterAnnual()` hosting-evaluation-choice difference, not a numeric bug). NC, CO, and OR's `SEEDLING`
+and `TREE` most-recent panels agree (checked directly: same max `YEAR` under `ANNUAL` for both
+functions in all three), so NC was substituted for the `ANNUAL` regression test instead. This is a
+live-data-cache observation, not a package bug, and needs no fix -- flagged here (rather than under
+"Findings") since it's specific to today's cached extract, matching the precedent set by
+`dwm.md`'s RI section and the "Unrelated, pre-existing, noticed-in-passing" CO/OR drift note in the
+validation-initiative memory.
+
+## Findings (reported, not fixed -- see bug-handling protocol)
+
+1. **`method = 'ANNUAL'` emits a spurious `max()`-on-empty-group warning when a domain filter matches
+   zero rows**, the same shared `filterAnnual()` defect already reported (not fixed) for `dwm()` in
+   `dwm.md`'s "Findings" section. Reproduced directly on RI: both
+   `seedling(db_ri, treeDomain = SPCD == 999, method = 'ANNUAL')` and
+   `seedling(db_ri, areaDomain = STATECD == 999, method = 'ANNUAL')` emit
+   `"no non-missing arguments to max; returning -Inf"` from inside a `dplyr::mutate()` call, while
+   still returning the correct, clean 0-row result. Root cause and fix scope are identical to the
+   `dwm()` write-up (an unguarded `max()` inside `filterAnnual()`, shared by every `sumToEU()`-based
+   estimator, not `seedling()`-specific) -- not re-investigated here since it would be a duplicate
+   analysis; not fixed here for the same reason `dwm()`'s instance wasn't (narrow trigger, no
+   regression test pinned to it, per Jeff's existing sign-off on that approach).
+
 ## Deferred to follow-up (not covered this pass, flagged for sign-off before touching)
 
 - **`treeList = TRUE` output duplicates seedling counts across conditions on multi-condition plots.**
@@ -204,8 +301,6 @@ exactly (regression test added, see below). Full package test suite re-run with 
   that doesn't route through `customPSE()`'s dedup-by-`(SUBP, TREE)` behavior. Still needs the proper
   join fix; downgraded here from "may corrupt `customPSE()` calculations" to "safe for the standard
   `customPSE()` pattern, unsafe if `CONDID` is added to `xGrpBy`/`yGrpBy`."
-- `method` options other than `'TI'` (no EVALIDator equivalent; internal-consistency-only checks per
-  the plan, not yet added).
 - `byPlot = TRUE` aggregating to reproduce the population-level estimate exactly (only the specific
   split-condition-plot hand calculation above was checked, not a full aggregation reconciliation --
   same limitation noted in `tpa.md`/`invasive.md`).

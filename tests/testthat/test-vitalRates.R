@@ -369,3 +369,166 @@ test_that("vitalRates() bySpecies matches EVALIDator per-species (RI)", {
                  label = paste0("nPlots_TREE (SPCD ", sampled$SPCD[i], ")"))
   }
 })
+
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, totals/per-acre/per-stem plumbing holds regardless of
+# method, and the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md for the full writeup of why).
+# See tests/testthat/test-util.R for the underlying maWeights()/
+# filterAnnual()/combineMR() unit-level checks these per-function tests
+# build on.
+#
+# A real, previously-unknown bug (not just a missing-coverage gap) was found
+# and fixed during this pass -- see vitalRates.md, "Fixed" #7, for the full
+# root-cause writeup. Summary: sumToEU()'s (R/util.R) SMA/LMA/EMA
+# weighted-average collapse grouped the numerator side ("x") by
+# `P2PNTCNT_EU` in addition to the intended grouping columns, but the
+# denominator side ("y") correctly omitted it. Since P2PNTCNT_EU legitimately
+# varies per remeasurement panel under a non-TI method, this silently
+# prevented the numerator side from ever collapsing panels into one row --
+# invisible for every estimator that calls sumToEU() only once (the
+# dispatcher's own final group_by()/summarize(sum(...)) step happens to
+# finish the collapse regardless), but vitalRatesStarter.R (like
+# growMortStarter.R) calls sumToEU() a *second* time for a tree-total
+# covariance term and left_joins the two outputs together -- a many-to-many
+# join between two not-yet-collapsed multi-row tables, multiplying every
+# growth total (BIO_TOTAL, TREE_TOTAL, etc.) roughly by the number of
+# constituent panels (RI: BIO_GROW_AC 0.26 (TI) vs. 2.51 (SMA, pre-fix) --
+# an ~860% inflation, vs. ~18% post-fix, itself explained by ordinary
+# sampling noise on a near-zero estimate -- see Test 19 below). Tests 18-24
+# below are general non-TI coverage (mirroring tpa.md's template); Test 24
+# specifically regression-tests this exact bug via nPlots_TREE, which the
+# pre-fix join bug inflated by roughly the panel count regardless of domain
+# filters.
+
+# Test 18 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI). Never exactly
+# equal (see test-util.R for why the exact boundary is degenerate) -- this
+# checks the trend, not a fixed-tolerance snapshot. Mirrors tpa.md's Test 16.
+test_that("vitalRates() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(vitalRates(db_ri, method = 'SMA'))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(vitalRates(db_ri, method = 'EMA', lambda = lam))
+    abs(ema$BIO_GROW_AC - sma$BIO_GROW_AC)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 0.01)
+})
+
+# Test 19 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general (see
+# tpa.md). Unlike TPA/BAA/BIO_ACRE (always positive, bounded away from
+# zero), BIO_GROW_AC is a *net* growth rate (ingrowth minus mortality/cut)
+# that is legitimately small or near-zero for a slow-growing/small-sample
+# state -- RI's TI estimate (0.26) has a 64% SE, so a flat relative-%
+# tolerance (as used in tpa.md/biomass.md) is not well-suited here: a modest
+# absolute difference translates into a large-looking relative one. Instead,
+# bound the absolute |SMA - TI| difference by a multiple of the *combined*
+# sampling error of the two estimates (sqrt(SE_TI^2 + SE_SMA^2), the SE of
+# their difference under independence) -- i.e., "not statistically
+# distinguishable from sampling noise." Observed ratios (diff / combined SE)
+# were 0.20 (RI), 1.10 (NC), 0.85 (CO), 0.20 (OR) -- all comfortably under
+# 1.5, the bound used below. This would NOT have passed pre-fix: the join-
+# explosion bug (see header above) inflated RI's SMA estimate by ~9 combined
+# SEs.
+for (st in states) {
+  test_that(paste("vitalRates() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(vitalRates(dbs[[st]], method = 'TI'))
+    sma <- as.data.frame(vitalRates(dbs[[st]], method = 'SMA'))
+    ti_se_abs <- abs(ti$BIO_GROW_AC) * ti$BIO_GROW_AC_SE / 100
+    sma_se_abs <- abs(sma$BIO_GROW_AC) * sma$BIO_GROW_AC_SE / 100
+    combined_se <- sqrt(ti_se_abs^2 + sma_se_abs^2)
+    expect_lt(abs(sma$BIO_GROW_AC - ti$BIO_GROW_AC), 1.5 * combined_se)
+  })
+}
+
+# Test 20 ------------------------------
+# totals = TRUE / per-acre / per-stem consistency holds under every non-TI
+# method, not just TI (Test 8 above only checked the TI/default path).
+for (st in states) {
+  test_that(paste("vitalRates() totals are consistent with per-acre/per-stem estimates under non-TI methods (", st, ")"), {
+    for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+      out <- as.data.frame(vitalRates(dbs[[st]], totals = TRUE, method = m))
+      expect_equal(out$BA_TOTAL / out$AREA_TOTAL, out$BA_GROW_AC, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " BA_GROW_AC"))
+      expect_equal(out$BIO_TOTAL / out$AREA_TOTAL, out$BIO_GROW_AC, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " BIO_GROW_AC"))
+      expect_equal(out$BA_TOTAL / out$TREE_TOTAL, out$BA_GROW, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " BA_GROW"))
+      expect_equal(out$BIO_TOTAL / out$TREE_TOTAL, out$BIO_GROW, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " BIO_GROW"))
+    }
+  })
+}
+
+# Test 21 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error.
+test_that("vitalRates() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(vitalRates(db_ri, method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'BIO_GROW') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 22 ------------------------------
+# Domain filter + bySpecies interaction (the historical
+# area()/areaChange() bug pattern from v1.1.1, see tpa.md Test 15) re-run
+# under every non-TI method: no error, no warning, sane (finite) shape.
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("vitalRates() domain filter + bySpecies runs cleanly under method =", m, "(", st, ")"), {
+      expect_no_warning(
+        out <- as.data.frame(vitalRates(dbs[[st]], treeDomain = DIA >= 20, areaDomain = PHYSCLCD %in% 21:29,
+                                        bySpecies = TRUE, method = m))
+      )
+      expect_true(nrow(out) >= 0)
+      expect_true(all(is.finite(out$BIO_GROW_AC) | is.na(out$BIO_GROW_AC)))
+    })
+  }
+}
+
+# Test 23 ------------------------------
+# Plain default-args smoke tests, one per state, for EMA and ANNUAL. ANNUAL
+# is regression coverage for the combineMR()/ANNUAL pooling bug (tpa.md,
+# "Fixed" #6) -- vitalRates() already passes `method` through to
+# combineMR() (R/vitalRates.R), so a returned multi-row (not pooled) result
+# here confirms it's unaffected. EMA mirrors tpa.md's v1.1.1 regression
+# coverage.
+for (st in states) {
+  test_that(paste("vitalRates() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(vitalRates(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+
+  test_that(paste("vitalRates() runs with method = 'ANNUAL' and default arguments, one row per panel (", st, ")"), {
+    expect_no_error(out <- as.data.frame(vitalRates(dbs[[st]], method = 'ANNUAL')))
+    expect_s3_class(out, "data.frame")
+    expect_gt(nrow(out), 1) # not pooled into a single mislabeled row
+  })
+}
+
+# Test 24 ------------------------------
+# Regression test for the sumToEU()/P2PNTCNT_EU join-explosion bug found
+# during this pass (see header above and vitalRates.md "Fixed" #7).
+# nPlots_TREE is a direct, cheap witness: pre-fix, the bug inflated it by
+# roughly the number of constituent panels (RI: 108 (TI) -> 708 (SMA), a
+# ~6.5x blow-up) regardless of domain filters, since the join duplicates
+# every row in the (already correct) tree list. Post-fix, SMA draws on the
+# same underlying remeasurement-panel universe as TI (TI's static stratum
+# weighting already spans every panel in the evaluation's window, just
+# weighted differently than SMA's moving average), so nPlots_TREE is
+# expected to match exactly -- confirmed empirically in all four states.
+# This is a stronger, more direct check than Test 19's bounded-tolerance
+# comparison, which a sufficiently small residual bug could still slip past.
+for (st in states) {
+  test_that(paste("vitalRates() nPlots_TREE under SMA is not inflated relative to TI (", st, ")"), {
+    ti <- as.data.frame(vitalRates(dbs[[st]], method = 'TI'))
+    sma <- as.data.frame(vitalRates(dbs[[st]], method = 'SMA'))
+    expect_equal(sma$nPlots_TREE, ti$nPlots_TREE)
+  })
+}

@@ -123,6 +123,17 @@ Full details on this validation are provided in the development version of `rFIA
   `carbon()`, `biomass()`, `volume()`, `dwm()`, `invasive()`, `seedling()`, `standStruct()`,
   `diversity()`, and `vegStruct()`; see above), including the same spurious/empty-result-with-warning
   edge case when a restriction matched no data. Point estimates and sampling errors were not affected.
++ Fixed a bug affecting `vitalRates()` and `growMort()` under `method = 'SMA'`/`'LMA'`/`'EMA'` where
+  growth/mortality totals (and every ratio derived from them, e.g. `BIO_GROW_AC`, `MORT_TPA`) were
+  inflated by roughly the number of remeasurement panels in the evaluation window -- up to ~9x in
+  testing. Root cause: a shared internal utility (`sumToEU()`) that combines per-panel moving-average
+  estimates into a single population estimate grouped the tree/growth side of the calculation by an
+  extra, panel-varying column that should not have been part of the grouping key, preventing panels
+  from actually being combined; `vitalRates()`/`growMort()`'s internal need to compute two related
+  population estimates and join them together turned this into a many-to-many join that squared the
+  row count. Every other estimator was unaffected in practice (a separate summation step downstream
+  happened to still produce the correct total), which is why this was not caught until now. `method =
+  'TI'` and `'ANNUAL'` were not affected.
 
 ### `fsi()`
 

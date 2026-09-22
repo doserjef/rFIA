@@ -48,6 +48,19 @@ Four states, one per FIA region, read from the local FIADB extract cache (`~/Dro
 **NC** (Southern), **CO** (Interior West), **OR** (Pacific Northwest). All work here used
 `~/R-4.6.0`/`~/R/x86_64-pc-linux-gnu-library/4.6` per this session's environment.
 
+**Data-hygiene note (non-TI pass, follow-up session)**: the local FIADB cache lives in a
+Dropbox-synced folder. Mid-session, an OR `fsi()` run returned `FSI = 0.804`/`nPlots = 9022`, then an
+identical rerun of the identical call minutes later returned `FSI = -0.405`/`nPlots = 9084` -- initially
+indistinguishable from a non-determinism bug in `fsi()` itself. `dropbox status` confirmed an active
+background sync ("Syncing 33 files") at the exact timestamp of the first (anomalous) run, and
+`OR_*.csv` file mtimes matched that sync window; four repeated calls against the *same*, already-loaded
+`db` object were, by contrast, perfectly reproducible (byte-identical `FSI`/`nPlots` every time). This
+narrows the cause to a torn/partial read of the CSVs mid-overwrite by Dropbox, not `fsi()` -- but it's a
+real, silent-failure-mode hazard for this validation methodology generally (no error or warning of any
+kind accompanied the bad read), worth flagging for every future pass using this same local cache. All
+numeric results below were captured after confirming `dropbox status` reported "Up to date" and were
+independently re-verified as reproducible (4 repeated calls, byte-identical) before being recorded.
+
 ## Results
 
 ### Formula fidelity vs. Stanke et al. 2021 (eqs. 1-4)
@@ -121,6 +134,10 @@ exists for non-TI estimators, per the project plan -- structural/no-crash check 
 dplyr-deprecation warning (`across(..., sum, na.rm = TRUE)` old-style, from `R/fsi.R`'s
 `ANNUAL`/moving-average branch) fired under `ANNUAL`; not a numeric bug, but will break under a future
 dplyr major version. Not fixed this pass (out of scope; see "Known issues").
+
+This was only a structural/no-crash check at the time it was written; see "Non-TI method validation"
+below for the full numeric/behavioral pass (the same treatment given to every other estimator's
+`method != 'TI'` path in this project).
 
 ### `bySpecies` / `bySizeClass` (RI)
 
@@ -308,3 +325,106 @@ population-level bias described in "Fixed" #1 above, so this was not the cause o
 investigated as a candidate root cause and ruled out.
 
 **Reviewed and confirmed intentional -- not a bug.** Left as `'VOL'`, unchanged.
+
+## Non-TI method validation (SMA/LMA/EMA/ANNUAL)
+
+EVALIDator has no equivalent for these, so correctness here means: `fsi()`'s output behaves sanely and
+consistently with the already-validated `TI` estimates wherever the documentation actually claims a
+relationship, and its shared-utility touchpoints (`maWeights()`, `mergeSmallStrata()`, `combineMR()` --
+all in `R/util.R`) are exercised correctly. See `tpa.md`/`vitalRates.md` (the templates this section
+follows) for the general non-`TI` methodology.
+
+**Architectural context that shapes this section**: `fsi()` does *not* use `sumToEU()`, the shared
+population-estimation engine every other `method`-aware estimator (`tpa()`, `biomass()`, `growMort()`,
+`vitalRates()`, etc.) is built on. It has its own, bespoke estimator (`fsiHelper2`, `R/fsiHelper.R`),
+which reimplements the panel-collapse-and-reweight logic independently. This matters because
+`vitalRates()`'s non-`TI` pass (see `vitalRates.md` "Fixed" #7) found a real, package-wide bug in
+`sumToEU()`'s own SMA/LMA/EMA collapse step (grouping by a per-panel-varying column, `P2PNTCNT_EU`,
+defeated the collapse and caused a many-to-many join explosion whenever an estimator called
+`sumToEU()` twice on the same data) -- but that fix lives entirely inside `sumToEU()`, so it has **no
+bearing on `fsi()`**, which never calls that function. `fsi()`'s own panel-reweighting join
+(`R/fsi.R`'s `dplyr::left_join(wgts, by = joinCols)`, in the "Compute moving average weights" block) is
+a structurally different design: for `SMA`, `maWeights()` returns one weight row per `(YEAR, STATECD)`
+with no `INVYR` column at all (every panel in the window shares the same uniform weight), so the join
+is one-to-many by construction and cannot explode; for `LMA`/`EMA`, `joinCols` explicitly includes
+`INVYR`, matching `wgts`' own one-row-per-`(YEAR, STATECD, INVYR)` grain, so that join is one-to-one.
+This was verified empirically, not just by code reading -- see the `nPlots` results below, which are
+the direct empirical signature the `vitalRates()` bug would have left behind (there, `nPlots_TREE` was
+inflated by roughly the constituent-panel count; here, it is not).
+
+### Results
+
+All results below were computed with `betas = data.frame(grps = 1, alpha = 1, rate = 0, n = 1)` (see
+"Methodology"), isolating the panel-weighting/collapse machinery from the stochastic JAGS curve fit,
+across the same four states used throughout this report.
+
+- **Structural**: `TI`, `SMA`, `LMA`, `EMA`, and `ANNUAL` all run to completion without error or
+  warning (RI) -- **pass**, superseding the shallower structural-only check recorded earlier in this
+  report under "`method=` structural checks (RI)".
+- **`nPlots` matches exactly across `TI`/`SMA`/`LMA`/`EMA`, 4 states** -- the direct regression witness
+  against the `vitalRates()`-class bug described above (there, `nPlots_TREE` was inflated ~6-10x
+  post-panel-count; here, it is byte-identical across all four non-`TI` methods and `TI`):
+
+  | State | TI | SMA | LMA | EMA |
+  |---|---|---|---|---|
+  | RI | 109 | 109 | 109 | 109 |
+  | NC | 3473 | 3473 | 3473 | 3473 |
+  | CO | 3641 | 3641 | 3641 | 3641 |
+  | OR | 9084 | 9084 | 9084 | 9084 |
+
+  **Pass** in all four states. (This equality is expected for the same reason documented in
+  `vitalRates.md`: `fsi()`'s growth-eligible/remeasured plot population is shared across every
+  `method`, since `TI`'s static weighting already draws on every panel in the evaluation window --
+  `SMA`/`LMA`/`EMA` differ only in *how* each panel is weighted, not in *which* plots contribute.)
+- **`EMA(lambda -> 1)` vs `SMA` (RI)**: `|EMA_FSI - SMA_FSI|` shrinks monotonically as lambda increases
+  (3.30 -> 0.99 -> 0.10 -> 0.01 for lambda = 0.5/0.9/0.99/0.999) -- **pass**, confirms the same limiting
+  relationship established in `tpa.md`/`vitalRates.md` holds at the `fsi()` output level too.
+- **TI vs SMA bounded agreement, 4 states**: like `vitalRates()`'s `BIO_GROW_AC`, `FSI` is a signed rate
+  of change (density decline is the typical case; all four states here show net decline) that can be
+  small relative to its own sampling error, so the flat relative-tolerance check used for
+  always-positive quantities (`tpa()`'s `TPA`/`BAA`) isn't appropriate. Bounding the absolute difference
+  by 1.5x the combined standard error of the two estimates instead (`sqrt(SE_TI^2 + SE_SMA^2)`):
+
+  | State | TI FSI | SMA FSI | Combined SE (abs) | \|diff\| / combined SE |
+  |---|---|---|---|---|
+  | RI | -13.029 | -12.855 | 4.917 | 0.035 |
+  | NC | -8.452 | -9.211 | 2.813 | 0.270 |
+  | CO | -3.978 | -3.745 | 0.962 | 0.242 |
+  | OR | -0.405 | -0.762 | 1.111 | 0.322 |
+
+  All four states land well within the 1.5x bound (max observed 0.322, OR) -- **pass** in all four.
+- **`method = 'ANNUAL'` returns one row per real constituent panel, not a single pooled row, 4 states**:
+  RI 7 rows (2019-2025), NC 8 (2017-2024), CO 10 (2014-2023), OR 10 (2015-2024) -- **pass**, confirming
+  `combineMR()`'s method-awareness fix (`R/util.R`, a shared utility fixed during `area()`'s later
+  non-`TI` pass -- see `tpa.md` "Fixed" #6) correctly covers `fsi()`, which was one of the ~16 dispatcher
+  call sites updated by that fix but not itself re-verified there.
+- **`byPlot = TRUE` + non-TI method (RI, SMA)**: runs cleanly, returns 110 rows, one per unique
+  `PLT_CN` -- **pass**, confirms no row duplication analogous to `fsi.md`'s own "Fixed" #1 (which was a
+  `PLOT_BASIS`-fragment collapse failure specific to the *population-estimate* branch; `byPlot` uses a
+  different code path entirely and was already confirmed unaffected by that fix).
+- **`useSeries = TRUE` + non-TI method (RI)**: `SMA`, `EMA`, and `ANNUAL` all run without error, at both
+  population level and `byPlot = TRUE` -- **pass**. `fsi()`'s `useSeries` (chaining multiple
+  remeasurements into one weighted estimate) has no analog in `tpa()`/`vitalRates()`, so this
+  interaction had no precedent to draw on; confirmed here for the first time.
+- **Domain filter (`treeDomain = DIA >= 10`, `areaDomain` mesic) + `bySpecies` under each of
+  `SMA`/`LMA`/`EMA`/`ANNUAL`, 4 states**: no errors, no `NA`/`NaN` `FSI` values, plausible row counts in
+  all 16 combinations -- **pass**. Re-runs the same historically-buggy filter/grpBy interaction pattern
+  from the `TI` validation under every non-`TI` method.
+- **`lambda` boundary validation propagates through `fsi()`'s `EMA` path (RI)**: `lambda` in
+  `{0, 1, -0.5, 1.5, NA}` each error immediately with the shared `maWeights()` validation message (see
+  `tpa.md` "Fixed" #4) -- **pass**, confirms that shared fix covers `fsi()` (`fsiHelper2` calls
+  `maWeights()` directly, per `fsi.md`'s "Scope" section above).
+- **`lambda` ribbon (multiple lambda values in one `EMA` call, RI)**: `lambda = c(0.3, 0.6, 0.9)`
+  returns 3 distinct rows (one per lambda), each with the full RI plot count (`nPlots = 109`) -- **pass**,
+  no cross-contamination between ribbons.
+
+**No bugs were found in `fsi()`'s non-`TI` code paths.** This is a genuine (not merely
+under-investigated) clean result: `fsi()`'s architectural independence from `sumToEU()` -- normally a
+liability, since it means fixes to the shared estimator don't automatically propagate to `fsi()` (see
+"Scope" above) -- happens to be exactly what insulated it from the specific bug class that hit
+`vitalRates()`/`growMort()`, because `fsi()`'s own panel-reweighting join was never structured the way
+that bug required (see the architectural note above). No code changes were made in this section; no
+`NEWS.md` entry was needed. Regression tests added: `tests/testthat/test-fsi.R` Tests 14-19 cover the
+`nPlots`-equality witness, the EMA/SMA convergence limit, the TI/SMA bounded-agreement check, the
+`ANNUAL` per-panel-row check, `byPlot` + non-TI non-duplication, and the `lambda` boundary validation,
+across all four states where applicable.

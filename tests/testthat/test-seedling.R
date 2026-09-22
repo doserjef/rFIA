@@ -272,3 +272,139 @@ test_that("seedling() bySpecies matches EVALIDator per-species (RI)", {
                  label = paste0("nPlots_TREE (SPCD ", sampled$SPCD[i], ")"))
   }
 })
+
+# Non-TI method (SMA/LMA/EMA/ANNUAL) internal consistency -------------------
+# EVALIDator has no equivalent for these, so correctness here means: the
+# code runs cleanly across the same filter/grpBy/byPlot space already
+# exercised above, totals/per-acre plumbing holds regardless of method, and
+# the documented cross-method relationships in
+# vignettes/alternativeEstimators.Rmd hold as *bounded*/*directional*
+# checks -- never exact equality (see tpa.md/seedling.md for the full
+# writeup of why). See tests/testthat/test-util.R for the underlying
+# maWeights()/filterAnnual() unit-level checks these per-function tests
+# build on.
+
+# Test 15 ------------------------------
+# EMA(lambda -> 1) should monotonically approach SMA (RI). Never exactly
+# equal -- lambda never literally reaches 1 in a real call (see
+# test-util.R for why the exact boundary is degenerate) -- so this checks
+# the trend, not a fixed-tolerance snapshot.
+test_that("seedling() EMA(lambda -> 1) monotonically approaches SMA (RI)", {
+  sma <- as.data.frame(seedling(db_ri, landType = 'forest', method = 'SMA'))
+  dists <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(seedling(db_ri, landType = 'forest',
+                                  method = 'EMA', lambda = lam))
+    abs(ema$TPA - sma$TPA)
+  })
+  expect_true(all(diff(dists) < 0))
+  expect_lt(dists[length(dists)], 1)
+})
+
+# Test 16 ------------------------------
+# TI and SMA are not claimed to be numerically equal in general (see
+# tpa.md for the panel plot-count CV computed for each of these four
+# states -- reused here rather than recomputed, since it's a state/data
+# property, not an estimator property). Same 10% relative tolerance as
+# tpa.md/biomass.md/standStruct.md/carbon.md.
+for (st in states) {
+  test_that(paste("seedling() TI and SMA agree within a bounded tolerance (", st, ")"), {
+    ti <- as.data.frame(seedling(dbs[[st]], landType = 'forest', method = 'TI'))
+    sma <- as.data.frame(seedling(dbs[[st]], landType = 'forest', method = 'SMA'))
+    expect_equal(sma$TPA, ti$TPA, tolerance = 0.10)
+  })
+}
+
+# Test 17 ------------------------------
+# totals = TRUE / per-acre consistency holds under every non-TI method, not
+# just TI (Test 9 above only checked the TI/default path).
+for (st in states) {
+  test_that(paste("seedling() totals are consistent with per-acre estimates under non-TI methods (", st, ")"), {
+    for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+      out <- as.data.frame(seedling(dbs[[st]], landType = 'forest',
+                                    method = m, totals = TRUE))
+      expect_equal(out$TREE_TOTAL / out$AREA_TOTAL, out$TPA, tolerance = 1e-9,
+                   label = paste0(st, " ", m, " TPA"))
+    }
+  })
+}
+
+# Test 18 ------------------------------
+# byPlot = TRUE combined with a non-TI method is a distinct code path --
+# mergeSmallStrata() (R/util.R) is explicitly skipped whenever byPlot =
+# TRUE, regardless of method. Confirm it still returns per-plot (not
+# population-level) rows without error.
+test_that("seedling() byPlot = TRUE works with a non-TI method (RI, SMA)", {
+  out <- as.data.frame(seedling(db_ri, landType = 'forest',
+                                method = 'SMA', byPlot = TRUE))
+  expect_true(all(c('PLT_CN', 'TPA') %in% names(out)))
+  expect_gt(nrow(out), 1) # per-plot rows, not a single population estimate
+})
+
+# Test 19 ------------------------------
+# Domain-filter + bySpecies interaction (the historical
+# area()/areaChange() bug pattern from v1.1.1, see tpa.md) re-run under
+# every non-TI method: no error, no warning, sane shape. Uses a species
+# filter (SPCD < 300) rather than tpa()'s DIA >= 20, since SEEDLING has no
+# DIA column (see "Scope" above).
+for (st in states) {
+  for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
+    test_that(paste("seedling() domain filter + bySpecies runs cleanly under method =", m, "(", st, ")"), {
+      expect_no_warning(
+        out <- as.data.frame(seedling(dbs[[st]], landType = 'forest',
+                                      treeDomain = SPCD < 300, areaDomain = PHYSCLCD %in% 21:29,
+                                      bySpecies = TRUE, method = m))
+      )
+      expect_true(nrow(out) >= 0)
+      expect_true(all(out$TPA >= 0, na.rm = TRUE))
+    })
+  }
+}
+
+# Test 20 ------------------------------
+# Plain default-args EMA smoke test, one per state -- regression coverage
+# for the v1.1.1 "error when setting method = 'EMA'" bug (NEWS.md), which
+# previously had zero dedicated regression tests anywhere in the package.
+for (st in states) {
+  test_that(paste("seedling() runs with method = 'EMA' and default arguments (", st, ")"), {
+    expect_no_error(out <- as.data.frame(seedling(dbs[[st]], method = 'EMA')))
+    expect_s3_class(out, "data.frame")
+  })
+}
+
+# Test 21 ------------------------------
+# Regression test for the combineMR()/ANNUAL pooling bug (see tpa.md,
+# "Fixed" #6). On a clipFIA(mostRecent = TRUE) db, method = 'ANNUAL'
+# previously relabeled every constituent panel to the same YEAR and summed
+# them into one badly inflated row instead of returning one row per real
+# sampled panel.
+#
+# NC, not RI, is used here -- a departure from test-tpa.R's Test 22 (which
+# uses RI). RI's currently-cached SEEDLING extract has zero rows for its
+# most recent (2025) panel, even unclipped (confirmed: all 40 plots
+# measured in INVYR 2025 have no SEEDLING rows at all, not just zero
+# seedlings for every species) -- the same class of FIA phase-data
+# publication lag documented for RI's DWM data in dwm.md ("RI is excluded
+# from every population-estimation check in this section"). This means
+# RI's clipped seedling() ANNUAL output tops out at 2024, which is *not*
+# self-hosted by RI's most recent (2025) evaluation, so it isn't guaranteed
+# to match a standalone full-history computation the way a true self-hosted
+# latest panel is (confirmed: RI's 2024 row differs slightly between the
+# clipped and full-history runs -- 211.2554 vs 211.1668 TPA, same
+# nPlots_TREE -- because filterAnnual() ends up choosing between different
+# candidate hosting evaluations in the two cases). NC's most recent
+# SEEDLING panel matches its most recent TREE panel (both 2024), so its
+# latest ANNUAL row is genuinely self-hosted and this comparison is valid.
+test_that("seedling() method = 'ANNUAL' on a clipFIA(mostRecent = TRUE) db returns one row per real panel, matching the unclipped history (NC)", {
+  db_nc <- dbs[["NC"]]
+  ann_clipped <- as.data.frame(seedling(db_nc, landType = 'forest', method = 'ANNUAL'))
+  # Not pooled into a single mislabeled row.
+  expect_gt(nrow(ann_clipped), 1)
+
+  fiaNC_full <- readFIA(validation_data_dir, states = "NC")
+  ann_full <- as.data.frame(seedling(fiaNC_full, landType = 'forest', method = 'ANNUAL'))
+
+  latest <- ann_clipped[which.max(ann_clipped$YEAR), ]
+  fullMatch <- ann_full[ann_full$YEAR == latest$YEAR, ]
+  expect_equal(latest$TPA, fullMatch$TPA, tolerance = 1e-6)
+  expect_equal(latest$nPlots_TREE, fullMatch$nPlots_TREE)
+})
