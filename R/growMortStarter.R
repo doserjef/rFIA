@@ -600,16 +600,6 @@ growMortStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
         dplyr::ungroup() %>%
         as.data.frame()
 
-      # TODO: testing
-      # test <- a %>%
-      #   dplyr::left_join(dplyr::select(a_ga, PLT_CN, AREA_BASIS = PROP_BASIS, 
-      #                                  CONDID, !!!aGrpSyms, fa_ga),
-      #                    by = c('PLT_CN', 'AREA_BASIS', 'CONDID', aGrpBy)) %>%
-      #   dplyr::left_join(plt.ga, by = 'PLT_CN') %>%
-      #   dplyr::mutate(fa = case_when(ga == 1 ~ fa_ga,
-      #                                TRUE ~ fa)) %>%
-      #   dplyr::select(PLT_CN, AREA_BASIS, CONDID, !!!aGrpSyms, fa) %>%
-      #   dplyr::filter(fa > 0)
       a <- a %>%
         dplyr::left_join(dplyr::select(a_ga, PLT_CN, AREA_BASIS = PROP_BASIS, 
                                        CONDID, !!!aGrpSyms, fa_ga),

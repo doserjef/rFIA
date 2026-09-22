@@ -196,3 +196,81 @@ test_that("fsi() method = 'ANNUAL' does not emit a deprecation warning (RI)", {
     out <- as.data.frame(fsi(db_ri, betas = trivialBetas, method = "ANNUAL"))
   )
 })
+
+# Non-TI (method != 'TI') validation (see fsi.md, "Non-TI method validation") -
+# fsi() has its own bespoke population-estimation code (fsiHelper2), sharing no
+# code with sumToEU() (the source of a real, package-wide bug found and fixed
+# during vitalRates()'s non-TI pass -- see vitalRates.md "Fixed" #7). These
+# tests confirm fsi()'s independent SMA/LMA/EMA collapse-and-rejoin logic
+# doesn't have an analogous defect.
+
+# Test 14 ------------------------------
+# nPlots must be identical across TI/SMA/LMA/EMA -- a direct regression
+# witness against the sumToEU()-class bug (panel rows failing to collapse,
+# inflating nPlots by roughly the constituent-panel count).
+for (st in states) {
+  test_that(paste("fsi() nPlots matches exactly across TI/SMA/LMA/EMA (", st, ")"), {
+    db_st <- dbs[[st]]
+    ti <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "TI"))
+    sma <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "SMA"))
+    lma <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "LMA"))
+    ema <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "EMA"))
+    expect_equal(sma$nPlots, ti$nPlots)
+    expect_equal(lma$nPlots, ti$nPlots)
+    expect_equal(ema$nPlots, ti$nPlots)
+  })
+}
+
+# Test 15 ------------------------------
+# EMA(lambda -> 1) must converge monotonically to SMA (the documented
+# limiting relationship; see vignettes/alternativeEstimators.Rmd).
+test_that("fsi() EMA(lambda -> 1) converges monotonically to SMA (RI)", {
+  sma <- as.data.frame(fsi(db_ri, betas = trivialBetas, method = "SMA"))
+  diffs <- sapply(c(0.5, 0.9, 0.99, 0.999), \(lam) {
+    ema <- as.data.frame(fsi(db_ri, betas = trivialBetas, method = "EMA", lambda = lam))
+    abs(ema$FSI - sma$FSI)
+  })
+  expect_true(all(diff(diffs) < 0))
+})
+
+# Test 16 ------------------------------
+# TI and SMA should agree within a modest multiple of their combined sampling
+# error (same bounded-agreement check used in tpa.md/vitalRates.md).
+for (st in states) {
+  test_that(paste("fsi() TI and SMA agree within bounded sampling error (", st, ")"), {
+    db_st <- dbs[[st]]
+    ti <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "TI"))
+    sma <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "SMA"))
+    combSE <- sqrt(ti$FSI_VAR + sma$FSI_VAR)
+    expect_lt(abs(ti$FSI - sma$FSI) / combSE, 1.5)
+  })
+}
+
+# Test 17 ------------------------------
+# method = 'ANNUAL' must return one row per real constituent panel, not a
+# single pooled row (regression witness for combineMR()'s method-awareness,
+# a shared fix -- see tpa.md "Fixed" #6 -- confirmed here to cover fsi()).
+for (st in states) {
+  test_that(paste("fsi() method = 'ANNUAL' returns one row per panel, not pooled (", st, ")"), {
+    db_st <- dbs[[st]]
+    out <- as.data.frame(fsi(db_st, betas = trivialBetas, method = "ANNUAL"))
+    expect_equal(nrow(out), length(unique(out$YEAR)))
+    expect_gt(nrow(out), 1)
+  })
+}
+
+# Test 18 ------------------------------
+# byPlot + a non-TI method should return one row per plot, no duplication.
+test_that("fsi() byPlot = TRUE + method = 'SMA' does not duplicate plot rows (RI)", {
+  out <- as.data.frame(fsi(db_ri, betas = trivialBetas, byPlot = TRUE, method = "SMA"))
+  expect_equal(nrow(out), length(unique(out$PLT_CN)))
+})
+
+# Test 19 ------------------------------
+# lambda validation (maWeights(), a shared R/util.R utility -- see tpa.md
+# "Fixed" #4) must propagate through fsi()'s EMA path.
+test_that("fsi() errors on out-of-range lambda (RI)", {
+  for (lam in c(0, 1, -0.5, 1.5, NA)) {
+    expect_error(fsi(db_ri, betas = trivialBetas, method = "EMA", lambda = lam))
+  }
+})
