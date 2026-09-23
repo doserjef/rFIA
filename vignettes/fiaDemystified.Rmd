@@ -1,7 +1,7 @@
 ---
 title: "FIA Demystified"
 author: "Hunter Stanke, Jeffrey W. Doser"
-date: "2020 (last updated February 7, 2025)"
+date: "2020 (last updated September 23, 2026)"
 description: Learn how the estimation procedures work underneath the hood in `rFIA` 
 output: 
   rmarkdown::html_vignette:
@@ -13,7 +13,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-Despite being publicly available, FIA data are notoriosly difficult for most non-FIA users to interpret and understand, and there is potential to greatly increase the utilization of these data among industry professionals, academic scientists, and the general public. We created `rFIA` to solve this problem, offering a flexible, user-friendly tool which simplifies the process of working with FIA data and helps ensure this valuable public resource is, well... public. 
+Despite being publicly available, FIA data are notoriously difficult for most non-FIA users to interpret and understand, and there is potential to greatly increase the utilization of these data among industry professionals, academic scientists, and the general public. We created `rFIA` to solve this problem, offering a flexible, user-friendly tool which simplifies the process of working with FIA data and helps ensure this valuable public resource is, well... public. 
 
 In the examples that follow, we will show you the methods that underpin the estimation capacity of `rFIA`. We do not attempt to expain every line of code in the `rFIA` package here, but rather we present a simplified version to highlight our implementation of the major estimation procedures. You can find the complete source code for rFIA at [the development repository](https://github.com/doserjef/rFIA).  
 
@@ -180,7 +180,7 @@ ro12_b
 
 ## Grouped estimation procedures
 
-What if we want to produce estimates grouped by some attribute contained in the FIA Database, like forest type? We can accomplish by simply adding the attribute you want to group by to the `group_by` call in the estimation procedures above. This will then sum the biomass and carbon per acre of stems occuring on each forest type seperately.
+What if we want to produce estimates grouped by some attribute contained in the FIA Database, like forest type? We can accomplish by simply adding the attribute you want to group by to the `group_by` call in the estimation procedures above. This will then sum the biomass and carbon per acre of stems occurring on each forest type separately.
 
 ```{r}
 # Plot A

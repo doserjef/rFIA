@@ -1,7 +1,7 @@
 ---
 title: "Tips for working with big data"
 author: "Hunter Stanke, Jeffrey W. Doser"
-date: "2020 (last updated February 6, 2025)"
+date: "2020 (last updated September 23, 2026)"
 description: Learn about how to work with big data using `rFIA`  
 output: 
   rmarkdown::html_vignette:
@@ -68,7 +68,7 @@ fiaMR <- clipFIA(fia)
 biomass(fiaMR)
 ```
 
-In practice, `rFIA's` new larger-than-RAM methods make it possible for nearly anyone to work with very large subsets of FIA Database. In our testing, we have run `tpa()`, `biomass()`, `dwm()`, and `carbon()` for the entire continental US on a machine with just 16 GB of RAM (where the FIA data total ~ 50GB). 
+In practice, `rFIA's` larger-than-RAM methods make it possible for nearly anyone to work with very large subsets of FIA Database. In our testing, we have run `tpa()`, `biomass()`, `dwm()`, and `carbon()` for the entire continental US on a machine with just 16 GB of RAM (where the FIA data total ~ 50GB). 
 
 The only challenge that the `Remote.FIA.Database` presents is that it becomes difficult for users to modify variables in FIA tables (e.g., make tree size classes). However, it is possible to read in, modify, and save tables of interest prior to setting up a `Remote.FIA.Database`. For example, we can extend our example above to produce estimates of live tree biomass grouped by stand age classes, where stand age classes can be computed with `makeClasses()`. 
 
@@ -96,16 +96,24 @@ biomass(fia, grpBy = STANDAGEGROUP)
 ```
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
+# Work on a temporary copy of the RI and CT tables so the modified COND
+# tables never overwrite the original data directory
+modDir <- file.path(tempdir(), 'bigData-fia')
+dir.create(modDir, showWarnings = FALSE)
+file.copy(list.files('~/Dropbox/data/fia/', pattern = '^(RI|CT)_.*\\.csv$',
+                     full.names = TRUE),
+          modDir, overwrite = TRUE)
+
 # Rather than read all tables into memory, just read those of interest
 # In this case, we just need the COND table
-modTables <- readFIA(dir = '~/Dropbox/data/fia/', tables = 'COND', 
+modTables <- readFIA(dir = modDir, tables = 'COND',
                      states = c('RI', 'CT'), inMemory = TRUE)
 
 modTables$COND$STANDAGEGROUP <- makeClasses(modTables$COND$STDAGE, interval = 50)
 
-writeFIA(modTables, dir = '~/Dropbox/data/fia/', byState = TRUE)
+writeFIA(modTables, dir = modDir, byState = TRUE)
 
-fia <- readFIA(dir = '~/Dropbox/data/fia/', inMemory = FALSE, 
+fia <- readFIA(dir = modDir, inMemory = FALSE,
                states = c('RI', 'CT'))
 
 biomass(fia, grpBy = STANDAGEGROUP)

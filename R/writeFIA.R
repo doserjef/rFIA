@@ -72,7 +72,7 @@ writeFIA <- function(db,
       }
       for (i in 1:length(tableNames)){
         if (is.data.frame(db_clip[[i]])){
-          fwrite(x = db_clip[[i]], file = paste0(dir, tableNames[i], '.csv'), showProgress = FALSE, nThread = nCores)
+          fwrite(x = exactCN(db_clip[[i]]), file = paste0(dir, tableNames[i], '.csv'), showProgress = FALSE, nThread = nCores)
         }
       }
     }
@@ -84,10 +84,24 @@ writeFIA <- function(db,
 
     for (i in 1:length(tableNames)){
       if (is.data.frame(db[[i]])){
-        fwrite(x = db[[i]], file = paste0(dir, tableNames[i], '.csv'), showProgress = FALSE, nThread = nCores)
+        fwrite(x = exactCN(db[[i]]), file = paste0(dir, tableNames[i], '.csv'), showProgress = FALSE, nThread = nCores)
       }
     }
   }
 
 }
 
+
+# data.table::fwrite() writes doubles with at most 15 significant digits, but
+# FIADB CNs (read in as doubles by readFIA()) can have 16 digits. Writing them
+# as-is silently rounds them (e.g., 1097572188290487 -> 1097572188290490),
+# breaking joins between tables. Convert numeric CN columns to exact integer
+# strings before writing.
+exactCN <- function(x) {
+  cnCols <- names(x)[grepl('^(.*_)?CN$', names(x))]
+  cnCols <- cnCols[vapply(cnCols, \(col) is.double(x[[col]]), logical(1))]
+  if (length(cnCols) == 0) return(x)
+  x %>%
+    dplyr::mutate(dplyr::across(dplyr::all_of(cnCols),
+                                \(cn) ifelse(is.na(cn), NA_character_, sprintf('%.0f', cn))))
+}

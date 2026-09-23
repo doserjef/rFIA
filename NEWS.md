@@ -343,6 +343,16 @@ Full details on this validation are provided in the development version of `rFIA
   animation") but had no effect on the returned plot. `animate = TRUE` now drops years before
   `min.year` from the animation; static plots are unaffected.
 
+### `writeFIA()`
+
++ Fixed a bug in `writeFIA()` where 16-digit CNs (e.g., `CN`, `PLT_CN`, `PREV_PLT_CN`) were silently
+  rounded to 15 significant digits on writing (e.g., `1097572188290487` was written as
+  `1097572188290490`), since `data.table::fwrite()` writes doubles with at most 15 significant digits.
+  Because recent FIADB CNs have 16 digits, reading tables with `readFIA()`, modifying them, and saving
+  them with `writeFIA()` broke the joins between the saved tables and any unmodified ones (e.g., COND
+  rows no longer matched their PLOT and TREE rows), dropping recent plots from all subsequent
+  estimates. CN columns are now written as exact integers.
+
 # rFIA v1.1.4
 
 + Removed `.dots` argument from all calls to `dplyr::group_by()`, which resulted in an error with the latest version of `dplyr` (see [#54](https://github.com/doserjef/rFIA/issues/54)).  

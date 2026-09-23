@@ -63,8 +63,7 @@ Now that we have our data loaded, we can start estimating tree growth rates! Fir
 net <- vitalRates(db,
                   treeType = 'all', # "all" indicates net growth
                   grpBy = SITECLCD, # Grouping by site productivity class
-                  bySpecies = TRUE, # also grouping by species
-                  variance = TRUE)
+                  bySpecies = TRUE) # also grouping by species
 net
 ```
 
@@ -75,8 +74,7 @@ If we are instead interested in characterizing the average annual growth rate of
 live <- vitalRates(db,
                    treeType = 'live', # "live" excludes mortality and recruitment
                    grpBy = SITECLCD, # Grouping by site productivity class
-                   bySpecies = TRUE, # also grouping by species
-                   variance = TRUE)
+                   bySpecies = TRUE) # also grouping by species
 ```
 
 By default, `vitalRates()` will estimate average annual DBH, basal area, biomass, and net volume growth rates for *individual stems*, along with average annual basal area, biomass, and net volume growth *per acre*. Here we'll focus in on basal area, so let's simplify and pretty up our tables a bit:
@@ -86,7 +84,7 @@ By default, `vitalRates()` will estimate average annual DBH, basal area, biomass
 net <- net %>%
   # Dropping unnecessary columns
   select(SITECLCD, COMMON_NAME, SCIENTIFIC_NAME, SPCD,
-         BA_GROW, BA_GROW_AC, BA_GROW_VAR, BA_GROW_AC_VAR, nPlots_TREE, N) %>%
+         BA_GROW, BA_GROW_AC, BA_GROW_SE, BA_GROW_AC_SE, nPlots_TREE) %>%
   # Dropping rows with no live trees (growth was NA)
   filter(!is.na(BA_GROW)) %>%
   # Making SITECLCD more informative
@@ -105,7 +103,7 @@ net <- net %>%
 live <- live %>%
   # Dropping unnecessary columns
   select(SITECLCD, COMMON_NAME, SCIENTIFIC_NAME, SPCD,
-         BA_GROW, BA_GROW_AC, BA_GROW_VAR, BA_GROW_AC_VAR, nPlots_TREE, N) %>%
+         BA_GROW, BA_GROW_AC, BA_GROW_SE, BA_GROW_AC_SE, nPlots_TREE) %>%
   # Dropping rows with no live trees (growth was NA)
   filter(!is.na(BA_GROW)) %>%
   # Making SITECLCD more informative
@@ -121,25 +119,21 @@ live <- live %>%
   arrange(COMMON_NAME, SCIENTIFIC_NAME, SITECLCD, siteProd)
 ```
 
-Here `BA_GROW` gives us annual basal area growth per tree in square feet/year, and `BA_GROW_AC` gives us average basal area growth per acre in square feet/acre/year. But maybe we'd prefer units to be square centimeters instead - just remember to multiply the variance by the square of the conversion factor!
+Here `BA_GROW` gives us annual basal area growth per tree in square feet/year, and `BA_GROW_AC` gives us average basal area growth per acre in square feet/acre/year. But maybe we'd prefer units to be square centimeters instead.
 
 ```{r, eval = TRUE, echo=TRUE}
 # Net annual change
 net <- net %>%
   # Convert to square centimeters instead of square feet
   mutate(BA_GROW = BA_GROW * 929.03,
-         BA_GROW_AC = BA_GROW_AC * 929.03,
-         BA_GROW_VAR = BA_GROW_VAR * (929.03^2),
-         BA_GROW_AC_VAR = BA_GROW_AC_VAR * (929.03^2))
+         BA_GROW_AC = BA_GROW_AC * 929.03)
 net
 
 # Annual growth on live trees that remained live
 live <- live %>%
   # Convert to square centimeters instead of square feet
   mutate(BA_GROW = BA_GROW * 929.03,
-         BA_GROW_AC = BA_GROW_AC * 929.03,
-         BA_GROW_VAR = BA_GROW_VAR * (929.03^2),
-         BA_GROW_AC_VAR = BA_GROW_AC_VAR * (929.03^2))
+         BA_GROW_AC = BA_GROW_AC * 929.03)
 live
 ```
 
