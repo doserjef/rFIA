@@ -2,7 +2,7 @@
 
 This version implements a variety of updates to model estimation functions after a complete validation of the package's functionality. An extensive suite of unit tests are implemented for checking `rFIA` estimates with estimates from EVALIDator to ensure consistency of rFIA with updates in FIADB. This validation assessment fixed multiple bugs, particularly related to the reporting of sample sizes that were not always consistent dependent on different filtering criteria implemented in the estimation functions. Updates are broken down in the following based on specific functions.  
 
-Full details on this validation are provided in the development version of `rFIA` on GitHub in the `core_references/validation` directory. 
+Full details on this validation are provided in the development version of `rFIA` on GitHub in the `core_references/validation` directory. Note that Claude Code was used to aid in the validation assessment, with code verified by Jeff Doser. 
 
 ### `customPSE()`
 
@@ -25,6 +25,8 @@ Full details on this validation are provided in the development version of `rFIA
   already filters these before its own population-estimate call, but `customPSE()` calls `sumToPlot()`
   directly on user-supplied data. Confirmed against `tpa()`/`volume()`/`area()` across four states (one
   per FIA region). 
++ Fixed a `dplyr::across()` deprecation warning in `customPSE()` (`...` was passed through to `.fns`
+  rather than wrapped in an anonymous function, deprecated as of dplyr 1.1.0).
 
 ### Changes to multiple functions
 
@@ -298,6 +300,7 @@ Full details on this validation are provided in the development version of `rFIA
 + Fixed a bug in `dwm()` where `nPlots_AREA` did not reflect restrictions imposed by `landType` or `areaDomain`, instead always reporting the plot count for the broader unrestricted land base (the same class of bug already fixed in `tpa()`, `area()`, `carbon()`, `biomass()`, and `volume()`; see above -- `dwm()` was the one remaining estimator missing this fix). Point estimates and sampling errors were not affected.
 + Fixed a bug in `dwm()` where `COND_DWM_CALC` was filtered by `PLT_CN` alone when restricting to the current evaluation, but a single plot can appear in `COND_DWM_CALC` under several different `EVALID`s (consecutive annual panels can each report the same not-yet-remeasured plot as their most recent down woody material data), each with slightly different evaluation/stratum-specific adjustment factors. This caused every down woody material condition to be summed once per matching `EVALID` instead of once, inflating the reported `nPlots_DWM` plot count by roughly 4-5x in the states checked (e.g. Colorado: 17775 reported vs. 3897 actual contributing plots) and, more subtly, adding spurious phantom estimation-unit groups with no effect on the final point estimate or standard error (their area contribution was always `NA` and dropped), but real effect on the plot count. Point estimates and sampling errors were not affected; only `nPlots_DWM` was.
 + Fixed a bug in `dwm()` where `nPlots_DWM` counted every domain-qualifying, DWM-sampled plot regardless of whether it actually had any down woody material of the relevant fuel type, instead of requiring a strictly positive value (matching EVALIDator's own per-attribute definitions, and the same class of fix just made in `volume()`). This was checked and fixed separately for the combined default output (`byFuelType = FALSE`, which requires total FWD + CWD + pile volume across all fuel types to be positive, matching EVALIDator's combined "Total volume of DWM" attribute) and for `byFuelType = TRUE`'s individual fuel-type rows (each of which now requires only its own fuel type's volume -- or biomass, for `DUFF`/`LITTER`, which have no volume equivalent -- to be positive, matching each fuel type's own EVALIDator attribute). Point estimates and sampling errors were not affected.
++ Fixed a bug in `dwm()` under `method = 'SMA'`, `'LMA'`, `'EMA'`, and `'ANNUAL'` where the down woody material numerator was post-stratified using each plot's original stratum assignment (from `COND_DWM_CALC`), while the area denominator used the strata produced after small strata were merged (needed for variance estimation of annual panels). Plots moved into a neighboring stratum were therefore assigned to different strata in the numerator and denominator. Under the moving-average methods, numerator rows with no matching denominator stratum/panel/group were silently dropped, so down woody material totals were underestimated, and totals across `grpBy` groups did not sum to the ungrouped total (e.g. Colorado, `areaDomain = PHYSCLCD %in% 21:29`, `method = 'SMA'`: 13.75 vs. 14.47 billion cubic feet after the fix). The numerator now uses the same (merged) strata as the denominator. Estimates with `method = 'TI'` (the default) were not affected.
 
 ### `tpa()`
 

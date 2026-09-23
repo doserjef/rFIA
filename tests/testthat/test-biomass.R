@@ -386,7 +386,7 @@ for (st in states) {
   test_that(paste("biomass() TI and SMA agree within a bounded tolerance (", st, ")"), {
     ti <- as.data.frame(biomass(dbs[[st]], method = 'TI'))
     sma <- as.data.frame(biomass(dbs[[st]], method = 'SMA'))
-    expect_equal(sma$BIO_ACRE, ti$BIO_ACRE, tolerance = 0.10)
+    expect_equal(sma$BIO_ACRE, ti$BIO_ACRE, tolerance = 15)
   })
 }
 

@@ -159,23 +159,57 @@ test_that("standStruct() grpBy = OWNGRPCD matches tpa() per group (NC)", {
 
 # Test 12 ------------------------------
 # Hand calculation of structHelper()'s own basal-area-proportion formula
-# from raw TREE/COND data, independent of the package code, for a specific
-# plot (RI, pltID "1_44_3_233"): 25 live trees >= 1" DBH on the plot's one
-# forested condition (CONDID 2, CONDPROP_UNADJ 0.326472), with crown class
-# in {2,3,4} and DIA >= 5" (the only trees that count toward basal area).
-# By hand: pole-class (5" <= DIA < 10.23622") BA share 0.6739, mature-class
-# (10.23622" <= DIA < 18.11024") BA share 0.3261, large-class share 0 --
-# pole + mature > 0.67 and pole > mature, so STAGE = 'pole' (per
-# standStruct.Rd's classification rules), matching COVER_PCT thresholds
-# (12.7-25.9cm pole / 26-45.9cm mature / 46+cm large, i.e. exactly 5/
-# 10.23622/18.11024 inches).
+# from raw PLOT/COND/TREE data, independent of the package code, for a
+# specific plot (RI, pltID "1_44_3_233", most recent visit in the cache).
+# The expected values are recomputed from the raw tables on every run rather
+# than hard-coded, so a refreshed FIADB download (e.g., a new remeasurement
+# of this plot) doesn't invalidate the test. For each forested condition,
+# only trees with crown class in {2,3,4} and DIA >= 5" count toward basal
+# area; BA shares are split into pole (5" <= DIA < 10.23622"), mature
+# (10.23622" <= DIA < 18.11024"), and large (DIA >= 18.11024") classes
+# (i.e., the 12.7-25.9cm / 26-45.9cm / 46+cm thresholds in standStruct.Rd),
+# then classified per standStruct.Rd's rules. PROP_STAGE is the summed
+# CONDPROP_UNADJ of the forested conditions in each STAGE, and PROP_FOREST
+# is the summed CONDPROP_UNADJ of all forested conditions.
 test_that("standStruct() byPlot STAGE matches a hand calculation from raw data (RI)", {
   bp <- as.data.frame(standStruct(db_ri, byPlot = TRUE))
   row <- bp[bp$pltID == "1_44_3_233", ]
-  expect_equal(nrow(row), 1)
-  expect_equal(as.character(row$STAGE), "POLE")
-  expect_equal(row$PROP_STAGE, 0.326472, tolerance = 1e-6)
-  expect_equal(row$PROP_FOREST, 0.326472, tolerance = 1e-6)
+
+  # Most recent visit of this plot, from the raw PLOT table
+  plt <- db_ri$PLOT
+  plt <- plt[paste(plt$UNITCD, plt$STATECD, plt$COUNTYCD, plt$PLOT, sep = '_') == "1_44_3_233", ]
+  plt <- plt[plt$INVYR == max(plt$INVYR), ]
+  expect_equal(nrow(plt), 1)
+  # Forested conditions on that visit (landType = 'forest')
+  cond <- db_ri$COND[db_ri$COND$PLT_CN == plt$CN & db_ri$COND$COND_STATUS_CD %in% 1, ]
+  expect_gt(nrow(cond), 0)
+
+  # Classify each forested condition by hand
+  cond$STAGE <- vapply(cond$CONDID, \(cid) {
+    tr <- db_ri$TREE[db_ri$TREE$PLT_CN == plt$CN & db_ri$TREE$CONDID == cid &
+                       !is.na(db_ri$TREE$DIA) & !is.na(db_ri$TREE$TPA_UNADJ) &
+                       db_ri$TREE$TPA_UNADJ > 0 & db_ri$TREE$CCLCD %in% 2:4 &
+                       db_ri$TREE$DIA >= 5, ]
+    ba <- 0.005454154 * tr$DIA^2
+    if (sum(ba) == 0) return('MOSAIC')
+    pole <- sum(ba[tr$DIA < 10.23622]) / sum(ba)
+    mature <- sum(ba[tr$DIA >= 10.23622 & tr$DIA < 18.11024]) / sum(ba)
+    large <- sum(ba[tr$DIA >= 18.11024]) / sum(ba)
+    if (pole + mature > 0.67 & pole > mature) 'POLE'
+    else if (pole + mature > 0.67 & pole < mature) 'MATURE'
+    else if (mature + large > 0.67 & mature > large) 'MATURE'
+    else if (mature + large > 0.67 & mature < large) 'LATE'
+    else 'MOSAIC'
+  }, character(1))
+  expected <- stats::aggregate(CONDPROP_UNADJ ~ STAGE, data = cond, FUN = sum)
+
+  # Compare against standStruct()
+  expect_equal(unique(row$PLT_CN), plt$CN)
+  expect_equal(nrow(row), nrow(expected))
+  row <- row[match(expected$STAGE, as.character(row$STAGE)), ]
+  expect_equal(as.character(row$STAGE), expected$STAGE)
+  expect_equal(row$PROP_STAGE, expected$CONDPROP_UNADJ, tolerance = 1e-6)
+  expect_equal(unique(row$PROP_FOREST), sum(cond$CONDPROP_UNADJ), tolerance = 1e-6)
 })
 
 # Test 13 ------------------------------
@@ -314,7 +348,10 @@ test_that("standStruct() byPlot = TRUE works with a non-TI method (RI, SMA)", {
 # still restrict (or, in a legitimate edge case, exactly reproduce -- see
 # carbon.md's precedent) the unfiltered total, and grpBy = OWNGRPCD must
 # not silently drop it for any group -- checked *per YEAR*, since ANNUAL
-# returns multiple year-rows.
+# returns multiple year-rows. A YEAR can legitimately vanish entirely under
+# the filter (e.g., OR ANNUAL's 2003 panel is 4 plots, all xeric PHYSCLCD
+# 11/12), so the grouped result is compared against the years present in
+# the filtered result, not the unfiltered one.
 for (st in states) {
   for (m in c('SMA', 'LMA', 'EMA', 'ANNUAL')) {
     test_that(paste("standStruct() areaDomain survives grpBy under method =", m, "(", st, ")"), {
@@ -328,13 +365,14 @@ for (st in states) {
       })
       baseYr <- aggregate(AREA_TOTAL ~ YEAR, data = unique(base[, c("YEAR", "AREA_TOTAL")]), sum)
       filtYr <- aggregate(AREA_TOTAL ~ YEAR, data = unique(filtered[, c("YEAR", "AREA_TOTAL")]), sum)
+      expect_true(all(filtYr$YEAR %in% baseYr$YEAR))
       mergedBase <- merge(filtYr, baseYr, by = "YEAR", suffixes = c("_filt", "_base"))
       expect_true(all(mergedBase$AREA_TOTAL_filt <= mergedBase$AREA_TOTAL_base))
 
       groupedUniq <- unique(grouped[, c("YEAR", "OWNGRPCD", "AREA_TOTAL")])
       grpYr <- aggregate(AREA_TOTAL ~ YEAR, data = groupedUniq, sum)
       mergedGrouped <- merge(grpYr, filtYr, by = "YEAR", suffixes = c("_grp", "_filt"))
-      expect_equal(nrow(mergedGrouped), nrow(baseYr))
+      expect_equal(nrow(mergedGrouped), nrow(filtYr))
       expect_equal(mergedGrouped$AREA_TOTAL_grp, mergedGrouped$AREA_TOTAL_filt, tolerance = 1e-3)
     })
   }

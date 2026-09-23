@@ -38,6 +38,7 @@ _**To cite**_ `rFIA`, please refer to the publication in [Environmental Modeling
 |`clipFIA()`      | Spatial & temporal queries for FIA data                              |
 |`diversity()`    | Estimate diversity indices (e.g. species diversity)                  |
 |`dwm()`          | Estimate volume, biomass, and carbon stocks of down woody material   |
+|`findEVALID()`   | Find EVALIDs used in the FIADB                                       |
 |`fsi()`          | Estimate forest stability index for live tree populations            |
 |`getDesignInfo()`| Summarize attributes of FIA's post-stratified inventories            |
 |`getFIA()`       | Download FIA data, load into R, and optionally save to disk          |

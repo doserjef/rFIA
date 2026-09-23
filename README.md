@@ -40,30 +40,31 @@ Modeling and Software](https://doi.org/10.1016/j.envsoft.2020.104664)
 
 ## Functionality
 
-| `rFIA` Function   | Description                                                        |
-|-------------------|--------------------------------------------------------------------|
-| `area()`          | Estimate land area in various classes                              |
-| `areaChange()`    | Estimate annual change in land area in various classes             |
-| `biomass()`       | Estimate biomass and carbon stocks of standing trees               |
-| `carbon()`        | Estimate carbon stocks by IPCC forest carbon pools                 |
-| `customPSE()`     | Estimate custom variables                                          |
-| `clipFIA()`       | Spatial & temporal queries for FIA data                            |
-| `diversity()`     | Estimate diversity indices (e.g. species diversity)                |
-| `dwm()`           | Estimate volume, biomass, and carbon stocks of down woody material |
-| `fsi()`           | Estimate forest stability index for live tree populations          |
-| `getDesignInfo()` | Summarize attributes of FIA’s post-stratified inventories          |
-| `getFIA()`        | Download FIA data, load into R, and optionally save to disk        |
-| `growMort()`      | Estimate recruitment, mortality, and harvest rates                 |
-| `intersectFIA()`  | Join attributes of a spatial polygon(s) to FIA’s PLOT table        |
-| `invasive()`      | Estimate areal coverage of invasive species                        |
-| `plotFIA()`       | Produce static & animated plots of FIA summaries                   |
-| `readFIA()`       | Load FIA database into R environment from disk                     |
-| `seedling()`      | Estimate seedling abundance (TPA)                                  |
-| `standStruct()`   | Estimate forest structural stage distributions                     |
-| `tpa()`           | Estimate abundance of standing trees (TPA & BAA)                   |
-| `vitalRates()`    | Estimate live tree growth rates                                    |
-| `volume()`        | Estimate merchantable volume of standing trees                     |
-| `writeFIA()`      | Write in-memory FIA Database to disk                               |
+| `rFIA` Function | Description |
+|----|----|
+| `area()` | Estimate land area in various classes |
+| `areaChange()` | Estimate annual change in land area in various classes |
+| `biomass()` | Estimate biomass and carbon stocks of standing trees |
+| `carbon()` | Estimate carbon stocks by IPCC forest carbon pools |
+| `customPSE()` | Estimate custom variables |
+| `clipFIA()` | Spatial & temporal queries for FIA data |
+| `diversity()` | Estimate diversity indices (e.g. species diversity) |
+| `dwm()` | Estimate volume, biomass, and carbon stocks of down woody material |
+| `findEVALID()` | Find EVALIDs used in the FIADB |
+| `fsi()` | Estimate forest stability index for live tree populations |
+| `getDesignInfo()` | Summarize attributes of FIA’s post-stratified inventories |
+| `getFIA()` | Download FIA data, load into R, and optionally save to disk |
+| `growMort()` | Estimate recruitment, mortality, and harvest rates |
+| `intersectFIA()` | Join attributes of a spatial polygon(s) to FIA’s PLOT table |
+| `invasive()` | Estimate areal coverage of invasive species |
+| `plotFIA()` | Produce static & animated plots of FIA summaries |
+| `readFIA()` | Load FIA database into R environment from disk |
+| `seedling()` | Estimate seedling abundance (TPA) |
+| `standStruct()` | Estimate forest structural stage distributions |
+| `tpa()` | Estimate abundance of standing trees (TPA & BAA) |
+| `vitalRates()` | Estimate live tree growth rates |
+| `volume()` | Estimate merchantable volume of standing trees |
+| `writeFIA()` | Write in-memory FIA Database to disk |
 
 ## Installation
 
@@ -144,23 +145,23 @@ data("fiaRI")
 fiaRI_MR <- clipFIA(fiaRI, mostRecent = TRUE) 
 tpaRI_MR <- tpa(fiaRI_MR)
 head(tpaRI_MR)
-#> # A tibble: 1 × 8
-#>    YEAR   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA     N
-#>   <dbl> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int> <int>
-#> 1  2018  427.  122.   6.63   3.06         126         127   199
+#> # A tibble: 1 × 7
+#>    YEAR   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA
+#>   <dbl> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int>
+#> 1  2018  427.  122.   6.63   3.06         126         127
 
 # All Inventory Years Available (i.e., returns a time series)
 tpaRI <- tpa(fiaRI)
 head(tpaRI)
-#> # A tibble: 6 × 8
-#>    YEAR   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA     N
-#>   <dbl> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int> <int>
-#> 1  2013  467.  119.   6.64   3.09         120         123   197
-#> 2  2014  466.  120.   6.73   3.09         121         123   196
-#> 3  2015  444.  121.   6.40   3.06         122         124   194
-#> 4  2016  450.  123.   6.46   2.94         124         125   197
-#> 5  2017  441.  123.   6.66   3.01         124         125   196
-#> 6  2018  427.  122.   6.63   3.06         126         127   199
+#> # A tibble: 6 × 7
+#>    YEAR   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA
+#>   <dbl> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int>
+#> 1  2013  467.  119.   6.64   3.09         120         123
+#> 2  2014  466.  120.   6.73   3.09         121         123
+#> 3  2015  444.  121.   6.40   3.06         122         124
+#> 4  2016  450.  123.   6.46   2.94         124         125
+#> 5  2017  441.  123.   6.66   3.01         124         125
+#> 6  2018  427.  122.   6.63   3.06         126         127
 ```
 
 **What if I want to group estimates by species? How about by size
@@ -170,24 +171,24 @@ class?**
 # Group estimates by species
 tpaRI_species <- tpa(fiaRI_MR, bySpecies = TRUE)
 head(tpaRI_species, n = 3)
-#> # A tibble: 3 × 11
+#> # A tibble: 3 × 10
 #>    YEAR  SPCD COMMON_NAME          SCIENTIFIC_NAME      TPA    BAA TPA_SE BAA_SE
 #>   <dbl> <dbl> <chr>                <chr>              <dbl>  <dbl>  <dbl>  <dbl>
 #> 1  2018    12 balsam fir           Abies balsamea    0.0873 0.0295  114.   114. 
 #> 2  2018    43 Atlantic white-cedar Chamaecyparis th… 0.247  0.180    59.1   56.0
 #> 3  2018    68 eastern redcedar     Juniperus virgin… 1.14   0.138    64.8   67.5
-#> # ℹ 3 more variables: nPlots_TREE <int>, nPlots_AREA <int>, N <int>
+#> # ℹ 2 more variables: nPlots_TREE <int>, nPlots_AREA <int>
 
 # Group estimates by size class
 # NOTE: Default 2-inch size classes, but you can make your own using makeClasses()
 tpaRI_sizeClass <- tpa(fiaRI_MR, bySizeClass = TRUE)
 head(tpaRI_sizeClass, n = 3)
-#> # A tibble: 3 × 9
-#>    YEAR sizeClass   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA     N
-#>   <dbl>     <dbl> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int> <int>
-#> 1  2018         1 188.   3.57  13.0   12.8           76         127   199
-#> 2  2018         3  68.6  5.76  15.1   15.8           46         127   199
-#> 3  2018         5  46.5  9.06   6.51   6.57         115         127   199
+#> # A tibble: 3 × 8
+#>    YEAR sizeClass   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA
+#>   <dbl>     <dbl> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int>
+#> 1  2018         1 188.   3.57  13.0   12.8           76         127
+#> 2  2018         3  68.6  5.76  15.1   15.8           46         127
+#> 3  2018         5  46.5  9.06   6.51   6.57         115         127
 
 # Group by species and size class, and plot the distribution 
 # for the most recent inventory year
@@ -198,7 +199,7 @@ plotFIA(tpaRI_spsc, BAA, grp = COMMON_NAME, x = sizeClass,
         n.max = 5) # Only want the top 5 species, try n.max = -5 for bottom 5
 ```
 
-<img src="man/figures/README-unnamed-chunk-7-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-7-1.png" alt="" width="100%" />
 
 **What if I want estimates for a specific type of tree (ex. greater than
 12-inches DBH and in a canopy dominant or subdominant position) in a
@@ -219,11 +220,11 @@ tpaRI_own <- tpa(fiaRI_MR,
                      treeDomain = DIA > 12 & CCLCD %in% c(1,2),
                      areaDomain = PHYSCLCD %in% c(20:29))
 head(tpaRI_own)
-#> # A tibble: 2 × 9
-#>    YEAR OWNGRPCD   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA     N
-#>   <dbl>    <int> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int> <int>
-#> 1  2018       30 0.857  3.61   58.9   59.1           3          37   199
-#> 2  2018       40 1.48   3.97   25.7   27.7          12          83   199
+#> # A tibble: 2 × 8
+#>    YEAR OWNGRPCD   TPA   BAA TPA_SE BAA_SE nPlots_TREE nPlots_AREA
+#>   <dbl>    <int> <dbl> <dbl>  <dbl>  <dbl>       <int>       <int>
+#> 1  2018       30 0.857  3.61   58.9   59.1           3          37
+#> 2  2018       40 1.48   3.97   25.7   27.7          12          83
 ```
 
 **What if I want to produce estimates within my own population
@@ -244,7 +245,7 @@ tpaRI_counties <- tpa(fiaRI_MR, polys = countiesRI, returnSpatial = TRUE)
 plotFIA(tpaRI_counties, BAA) # Plotting method for spatial FIA summaries, also try 'TPA' or 'TPA_PERC'
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-9-1.png" alt="" width="100%" />
 
 **We produced a really cool time series earlier, how would I marry the
 spatial and temporal capacity of `rFIA` to produce estimates across

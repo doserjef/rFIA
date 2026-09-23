@@ -171,6 +171,17 @@ dwmStarter <- function(x, db, grpBy_quo = NULL, polys = NULL,
     # keeps only the row(s) for the evaluation actually being estimated,
     # before EVALID is dropped below.
     dplyr::semi_join(dplyr::select(pops, PLT_CN, EVALID), by = c('PLT_CN', 'EVALID')) %>%
+    # COND_DWM_CALC's own STRATUM_CN is the plot's original stratum
+    # assignment, but mergeSmallStrata() (non-TI methods) may have moved the
+    # plot into a neighboring stratum in `pops` -- which is what the area
+    # denominator (sumToPlot(a, pops, ...)) uses. Take STRATUM_CN from `pops`
+    # instead so the numerator and denominator are post-stratified
+    # identically; otherwise the numerator's stratum/panel/group rows can
+    # fail to match any denominator row in sumToEU() and be silently dropped
+    # from SMA/LMA/EMA estimates.
+    dplyr::select(-c(STRATUM_CN)) %>%
+    dplyr::left_join(dplyr::distinct(dplyr::select(pops, PLT_CN, EVALID, STRATUM_CN)),
+                     by = c('PLT_CN', 'EVALID')) %>%
     dplyr::select(-c(STATECD, COUNTYCD, UNITCD, INVYR, MEASYEAR, PLOT, EVALID))
 
   # Full condition list

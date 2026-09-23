@@ -205,12 +205,12 @@ customPSE <- function(db, x, xVars, xGrpBy = NULL, xTransform = NULL,
     xEst <- xEst %>%
       dplyr::select(-c(ESTN_UNIT_CN, AREA_USED)) %>%
       dplyr::group_by(!!!xGrpSyms) %>%
-      dplyr::summarize(dplyr::across(dplyr::everything(), sum, na.rm = TRUE))
+      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE)))
 
     yEst <- yEst %>%
       dplyr::select(-c(ESTN_UNIT_CN, AREA_USED, P2PNTCNT_EU)) %>%
       dplyr::group_by( !!!yGrpSyms) %>%
-      dplyr::summarize(dplyr::across(dplyr::everything(), sum, na.rm = TRUE))
+      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE)))
 
 
     # Join numerator/denominator, compute ratios
@@ -245,7 +245,7 @@ customPSE <- function(db, x, xVars, xGrpBy = NULL, xTransform = NULL,
     out <- xEst %>%
       dplyr::select(-c(ESTN_UNIT_CN, AREA_USED)) %>%
       dplyr::group_by(!!!xGrpSyms) %>%
-      dplyr::summarize(dplyr::across(dplyr::everything(), sum, na.rm = TRUE))
+      dplyr::summarize(dplyr::across(dplyr::everything(), \(x) sum(x, na.rm = TRUE)))
     out <- formatNames(out, xGrpBy)
 
   }
