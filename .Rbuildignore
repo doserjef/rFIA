@@ -15,3 +15,5 @@
 ^vignettes/\.gitignore$
 ^core_references$
 ^\.claude$
+^CLAUDE\.md$
+\.lintr$

@@ -69,7 +69,9 @@ fetch_evalidator <- function(wc,
   )
   url <- paste0(base, "?", query)
 
-  resp <- curl::curl_fetch_memory(url)
+  # Cap each request at 120 s so a stalled FIADB-API query fails (and the
+  # calling test skips) quickly rather than hanging for ~10 minutes.
+  resp <- curl::curl_fetch_memory(url, handle = curl::new_handle(timeout = 120))
   if (resp$status_code != 200) {
     stop("FIADB-API request failed (HTTP ", resp$status_code, "): ", url)
   }

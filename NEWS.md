@@ -1,4 +1,4 @@
-# rFIA (development version)
+# rFIA v1.2.0
 
 This version implements a variety of updates to model estimation functions after a complete validation of the package's functionality. An extensive suite of unit tests are implemented for checking `rFIA` estimates with estimates from EVALIDator to ensure consistency of rFIA with updates in FIADB. This validation assessment fixed multiple bugs, particularly related to the reporting of sample sizes that were not always consistent dependent on different filtering criteria implemented in the estimation functions. Updates are broken down in the following based on specific functions.  
 
@@ -352,6 +352,17 @@ Full details on this validation are provided in the development version of `rFIA
   them with `writeFIA()` broke the joins between the saved tables and any unmodified ones (e.g., COND
   rows no longer matched their PLOT and TREE rows), dropping recent plots from all subsequent
   estimates. CN columns are now written as exact integers.
+
+### Vignettes
+
++ Added a new vignette ("Validating rFIA against EVALIDator") that reports, for each estimation
+  function, how many unit tests compare `rFIA` estimates to EVALIDator and whether they passed, along
+  with a history of results across test runs.
+
+### Documentation
+
++ Updated the link to Bechtold and Patterson (2005) in all help files and the "FIA Demystified" vignette to its new location
+  (https://research.fs.usda.gov/download/treesearch/20371.pdf).
 
 # rFIA v1.1.4
 

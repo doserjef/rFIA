@@ -1,0 +1,366 @@
+---
+title: "Validating rFIA against EVALIDator"
+author: "Jeffrey W. Doser"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+description: A running record of unit tests that compare `rFIA` estimates to EVALIDator
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{evalidatorValidation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+options(knitr.kable.NA = "")
+
+# Directory holding the rFIA test logs. Each file is the full output of one
+# run of the test suite (rfia-tests-YYYY-MM-DD_HHMM.txt). Set the
+# RFIA_TEST_LOGS environment variable to render from a different directory.
+logDir <- Sys.getenv("RFIA_TEST_LOGS", "~/rfia-test-logs")
+logFiles <- sort(list.files(logDir, pattern = "^rfia-tests-.*\\.txt$", full.names = TRUE))
+haveLogs <- length(logFiles) > 0
+```
+
+```{r parse, include = FALSE, eval = haveLogs}
+# Pulls the value of a "Key:   value" line from the log header.
+headerValue <- function(lines, key) {
+  hit <- grep(paste0("^", key, ":"), lines, value = TRUE)
+  if (length(hit) == 0) return(NA_character_)
+  trimws(sub(paste0("^", key, ":"), "", hit[1]))
+}
+
+# Parses a single test log into run-level metadata and (when the log
+# includes one) the per-test results table.
+parseLog <- function(path) {
+  lines <- readLines(path, warn = FALSE, encoding = "UTF-8")
+  started <- headerValue(lines, "Run started")
+  totals <- grep("^\\[ FAIL [0-9]+ \\|", lines, value = TRUE)
+  getTotal <- function(what) {
+    if (length(totals) == 0) return(NA_integer_)
+    as.integer(sub(paste0(".*", what, " ([0-9]+).*"), "\\1", totals[1]))
+  }
+  overall <- headerValue(lines, "Overall")
+  meta <- data.frame(
+    log = basename(path),
+    started = as.POSIXct(sub(" [A-Z]+$", "", started), format = "%Y-%m-%d %H:%M:%S"),
+    commit = headerValue(lines, "Git commit"),
+    tree = headerValue(lines, "Working tree"),
+    filter = headerValue(lines, "Test filter"),
+    suite = if (is.na(overall)) "Runner error" else if (grepl("PASSED", overall)) "Passed" else "Failed",
+    suitePass = getTotal("PASS"),
+    suiteFail = getTotal("FAIL"),
+    suiteSkip = getTotal("SKIP"),
+    stringsAsFactors = FALSE
+  )
+  start <- grep("^==== PER-TEST RESULTS \\(CSV\\) ====$", lines)
+  end <- grep("^==== END PER-TEST RESULTS ====$", lines)
+  tests <- NULL
+  if (length(start) == 1 && length(end) == 1 && end > start + 1) {
+    tests <- read.csv(text = lines[(start + 1):(end - 1)], stringsAsFactors = FALSE)
+    tests$log <- basename(path)
+  }
+  list(meta = meta, tests = tests)
+}
+
+parsed <- lapply(logFiles, parseLog)
+runs <- do.call(rbind, lapply(parsed, `[[`, "meta"))
+tests <- do.call(rbind, lapply(parsed, `[[`, "tests"))
+
+# EVALIDator comparisons are identified by test name: every test that checks
+# an rFIA estimate against an EVALIDator reference value contains
+# "EVALIDator" in its description (e.g., "tpa() matches EVALIDator for ...").
+# The function is read off the start of the test name, falling back to the
+# test file name.
+if (!is.null(tests)) {
+  evTests <- tests[grepl("EVALIDator", tests$test), ]
+  evTests$fn <- ifelse(grepl("^[A-Za-z]+\\(\\)", evTests$test),
+                       sub("^([A-Za-z]+)\\(\\).*", "\\1", evTests$test),
+                       sub("^test-(.*)\\.R$", "\\1", evTests$file))
+  evTests$status <- ifelse(evTests$failed > 0 | evTests$error, "Failed",
+                           ifelse(evTests$skipped, "Skipped", "Passed"))
+} else {
+  evTests <- NULL
+}
+
+runs$hasDetail <- runs$log %in% unique(tests$log)
+fmtDate <- function(x) format(x, "%Y-%m-%d %H:%M")
+
+# Latest run with per-test detail, preferring runs of the full suite (no
+# test filter).
+detailRuns <- runs[runs$hasDetail, ]
+fullRuns <- detailRuns[is.na(detailRuns$filter), ]
+if (nrow(fullRuns) > 0) detailRuns <- fullRuns
+latest <- if (nrow(detailRuns) > 0) detailRuns[which.max(detailRuns$started), ] else NULL
+latestEv <- if (!is.null(latest)) evTests[evTests$log == latest$log, ] else NULL
+```
+
+```{r nologs, results = 'asis', eval = !haveLogs}
+cat("> **Note:** no test logs were found in `", logDir, "`, so the results ",
+    "tables below could not be generated. Set the `RFIA_TEST_LOGS` ",
+    "environment variable to the directory holding the logs and re-render.\n", sep = "")
+```
+
+# Overview
+
+EVALIDator is the USDA Forest Service's online tool for producing
+population estimates from the FIA Database (FIADB). Its estimates are the
+reference that FIA analysts and users compare against, so `rFIA` must
+reproduce them. The `rFIA` unit tests check estimates from the package's main
+estimation functions against values from EVALIDator for a range of common
+estimation settings. This document summarizes the results of those tests and
+keeps a record of how the tests have performed over time.
+
+## How the comparisons work
+
+Each comparison test has the same structure:
+
+1. **Data.** We read FIADB data for four states, one from each FIA region:
+   Rhode Island (Northern), North Carolina (Southern), Colorado (Interior West),
+   and Oregon (Pacific Northwest). We then subset each state to its most recent
+   evaluation with `clipFIA(mostRecent = TRUE)`.
+2. **Reference values.** At test time, reference values come from the
+   FIADB-API `fullreport` endpoint, the programmatic interface behind
+   EVALIDator. We request the same evaluation group (`EVAL_GRP`), attribute
+   (e.g., aboveground biomass of live trees on forest land), and domain filter
+   (e.g., a physiographic class filter for `areaDomain`, or a species filter
+   for `treeDomain`) that the `rFIA` call uses.
+3. **Comparison.** `rFIA` is run with the temporally indifferent estimator
+   (the default `method = 'TI'`), which is the method EVALIDator uses. Point
+   estimates and percent sampling errors must match EVALIDator to within a
+   relative tolerance of 10<sup>-6</sup>. Where EVALIDator reports them, the
+   number of non-zero plots used in the numerator and denominator of ratio
+   estimates must match exactly.
+
+The settings tested include the default case for each function, `landType`
+and `treeType` variants, biomass and carbon components, `treeDomain` and
+`areaDomain` filters, and per-species estimates (`bySpecies = TRUE`). One test
+is an approximate comparison rather than an exact one: `growMort()` for
+Oregon timberland. It checks that a known, documented discrepancy stays below
+1% (see [Known EVALIDator discrepancies](#known-evalidator-discrepancies)).
+The full test code is in `tests/testthat/` of the
+[rFIA GitHub repository](https://github.com/doserjef/rFIA). The analysis
+behind each function's tests is described in `core_references/validation/`.
+
+A test is recorded as **skipped**, not failed, when the FIADB-API cannot be
+reached. A skip means the comparison did not run, not that `rFIA` disagreed
+with EVALIDator.
+
+## How this document is updated
+
+The full `rFIA` test suite runs on a regular schedule (every 2 weeks) in addition
+to automated testing via GitHub. This document is updated each time a new log file
+is generated.
+
+```{r, results = 'asis', eval = haveLogs}
+cat("This version was generated from ", nrow(runs), " test log(s) found in `",
+    logDir, "`, covering runs from ", fmtDate(min(runs$started)), " to ",
+    fmtDate(max(runs$started)), ".\n", sep = "")
+```
+
+# Known EVALIDator discrepancies
+
+In one case, `rFIA` deliberately does not reproduce EVALIDator. We describe it
+below, along with why we chose not to match EVALIDator.
+
+## Timberland growth and mortality in states that use macroplots
+
+**Affected functions:** `growMort()` and `vitalRates()` with
+`landType = 'timber'`.
+
+**Affected states:** states whose condition proportions are measured on the
+macroplot, mainly in the Pacific Northwest (e.g., Oregon, Washington, and
+California). Estimates for forest land (`landType = 'forest'`, the default)
+match EVALIDator exactly in every state. Timberland estimates match
+EVALIDator exactly in Rhode Island, North Carolina, and Colorado, which have
+no macroplot-based conditions.
+
+**Size of the discrepancy:** at the time of the investigation (August 2026,
+Oregon evaluation group 412203), `rFIA` counted 7,788 plots in the Oregon
+timberland area denominator, compared with 7,749 in EVALIDator. This is a
+difference of 39 plots (about 0.5%). The resulting per-acre estimates differ
+by about 0.09%. For example, annual mortality was 1.672704 trees per acre in
+`rFIA` and 1.671130 in EVALIDator, and aboveground biomass growth was 1.367651
+in `rFIA` and 1.366364 in EVALIDator. Plot counts differed by a similar
+margin in California (2,580 vs. 2,562) and Washington (4,899 vs. 4,870).
+
+### What causes the difference
+
+Growth, removal, and mortality estimates are ratios. The denominator is the
+area of land that was in the same land class (forest land or timberland) at
+both the previous and current measurements of a plot. FIA estimates this area
+from the `SUBP_COND_CHNG_MTRX` table, which records the proportion of each
+subplot or macroplot that moved between condition classes between the two
+measurements. Each condition's area proportion is measured on either the
+subplot (`COND.PROP_BASIS = 'SUBP'`) or the larger macroplot
+(`PROP_BASIS = 'MACR'`). The FIA Population Estimation User Guide (Chapter
+7.8) says to take the change proportions from the matching plot component:
+`SUBPTYP = 1` rows for subplot-based conditions and `SUBPTYP = 3` rows for
+macroplot-based conditions.
+
+`rFIA` applies this rule to both forest land and timberland. We obtained the
+SQL that EVALIDator runs for these estimates (the FIADB-API returns it with
+each estimate) and found that EVALIDator is not consistent between the two
+land classes:
+
+- For the **forest land** denominator, EVALIDator applies the same
+  subplot/macroplot rule as `rFIA`, and the two agree exactly.
+- For the **timberland** denominator, EVALIDator only reads the subplot rows
+  (`SUBPTYP = 1`), so change on macroplot-based conditions is never read.
+  It then multiplies these subplot proportions by the *macroplot* adjustment
+  factor (`ADJ_FACTOR_MACR`) for macroplot-based conditions. A subplot
+  proportion scaled by a macroplot adjustment factor does not correspond to a
+  meaningful area.
+
+### Why `rFIA` does not reproduce EVALIDator here
+
+We decided to keep the `rFIA` behavior for the following reasons: 
+
+1. **It follows the documented method.** `rFIA` implements the rule from the
+   FIA Population Estimation User Guide. We found no documentation that gives
+   a reason for leaving macroplot-based timberland out of the
+   growth-accounting area, and our own assessment of the database logic is in 
+   line with the `rFIA` implementation.
+2. **It is consistent across land classes.** EVALIDator uses the
+   subplot/macroplot rule for forest land but not for timberland. Reproducing it 
+   would make `rFIA` treat the two land classes differently for no reason beyond
+   simply matching EVALIDator.
+3. **The effect is small and limited.** The difference is under 1% and only
+   occurs for timberland in states that use macroplot-based conditions.
+
+### How the tests handle it
+
+The `growMort()` tests compare Oregon timberland mortality to EVALIDator
+approximately: they check that the relative difference stays below 1%, so the
+test will catch any growth in the discrepancy. The `vitalRates()` timberland
+comparisons run only for Rhode Island, North Carolina, and Colorado, where the
+two agree exactly. 
+
+# Latest results
+
+```{r latestHeader, results = 'asis', eval = haveLogs}
+if (is.null(latest)) {
+  cat("None of the available logs include per-test results, so the number of",
+      "EVALIDator comparisons cannot be determined yet. Per-test results are",
+      "recorded in logs from runs made after this document was added.\n")
+} else {
+  cat("Results below are from the test run that started on **", fmtDate(latest$started),
+      "** (commit `", latest$commit, "`",
+      if (!is.na(latest$tree) && latest$tree != "clean") paste0(", with ", latest$tree) else "",
+      ").\n", sep = "")
+}
+```
+
+## Summary by function
+
+```{r latestTable, eval = haveLogs && !is.null(latest)}
+summarizeFn <- function(d) {
+  fns <- sort(unique(d$fn))
+  out <- data.frame(
+    Function = paste0("`", fns, "()`"),
+    Tests = as.integer(table(d$fn)[fns]),
+    Checks = as.integer(tapply(d$nb, d$fn, sum)[fns]),
+    Passed = as.integer(tapply(d$status == "Passed", d$fn, sum)[fns]),
+    Failed = as.integer(tapply(d$status == "Failed", d$fn, sum)[fns]),
+    Skipped = as.integer(tapply(d$status == "Skipped", d$fn, sum)[fns]),
+    stringsAsFactors = FALSE
+  )
+  out <- rbind(out, data.frame(Function = "**Total**", Tests = sum(out$Tests),
+                               Checks = sum(out$Checks), Passed = sum(out$Passed),
+                               Failed = sum(out$Failed), Skipped = sum(out$Skipped)))
+  out$Status <- ifelse(out$Failed > 0, "Failing",
+                       ifelse(out$Passed == 0, "Not run (skipped)",
+                              ifelse(out$Skipped > 0, "Passing (some skipped)", "Passing")))
+  out
+}
+knitr::kable(summarizeFn(latestEv), align = "lrrrrrl",
+             caption = paste("EVALIDator comparison tests in the run of",
+                             fmtDate(latest$started), "by function."))
+```
+
+`Tests` is the number of EVALIDator comparison tests for each function; most
+settings are tested once in each of the four states. `Checks` is the total
+number of individual assertions in those tests (point estimates, percent
+sampling errors, and plot counts). A test passes only if all of its checks
+pass.
+
+## Failed and skipped comparisons
+
+```{r latestProblems, results = 'asis', eval = haveLogs && !is.null(latest)}
+bad <- latestEv[latestEv$status != "Passed", ]
+if (nrow(bad) == 0) {
+  cat("All EVALIDator comparison tests passed in the latest run.\n")
+} else {
+  print(knitr::kable(data.frame(Function = paste0("`", bad$fn, "()`"),
+                                Test = bad$test, Status = bad$status),
+                     row.names = FALSE))
+}
+```
+
+# History across test runs
+
+## Summary by run
+
+```{r history, eval = haveLogs}
+hist <- runs[order(runs$started, decreasing = TRUE), ]
+evCount <- function(lg, what) {
+  if (!lg %in% unique(evTests$log)) return(NA_integer_)
+  d <- evTests[evTests$log == lg, ]
+  if (what == "Tests") nrow(d) else sum(d$status == what)
+}
+histTab <- data.frame(
+  Run = fmtDate(hist$started),
+  Commit = paste0("`", sub(" .*", "", hist$commit), "`",
+                  ifelse(!is.na(hist$tree) & hist$tree != "clean", "*", "")),
+  Tests = sapply(hist$log, evCount, what = "Tests"),
+  Passed = sapply(hist$log, evCount, what = "Passed"),
+  Failed = sapply(hist$log, evCount, what = "Failed"),
+  Skipped = sapply(hist$log, evCount, what = "Skipped"),
+  Suite = ifelse(is.na(hist$filter), hist$suite, paste0(hist$suite, " (subset)")),
+  stringsAsFactors = FALSE
+)
+histTab$Suite <- ifelse(is.na(hist$suitePass), histTab$Suite,
+                        paste0(histTab$Suite, " (", hist$suitePass, " passed, ",
+                               hist$suiteFail, " failed, ", hist$suiteSkip, " skipped)"))
+knitr::kable(histTab, row.names = FALSE, align = "llrrrrl",
+             caption = "EVALIDator comparison results for each test run, newest first.")
+```
+
+`Tests`, `Passed`, `Failed`, and `Skipped` count EVALIDator comparison tests.
+They are blank for older logs, which did not record per-test results. `Suite`
+gives the overall result of the full `rFIA` test suite, including tests that
+do not involve EVALIDator, with counts of individual checks. An asterisk next
+to a commit means the run was made with uncommitted changes to the package
+source. "(subset)" marks runs made with only part of the test suite.
+
+## Summary by function and run
+
+```{r historyByFn, eval = haveLogs && !is.null(evTests) && nrow(evTests) > 0}
+detailLogs <- hist$log[hist$log %in% unique(evTests$log)]
+fns <- sort(unique(evTests$fn))
+byFn <- sapply(detailLogs, function(lg) {
+  d <- evTests[evTests$log == lg, ]
+  sapply(fns, function(f) {
+    df <- d[d$fn == f, ]
+    if (nrow(df) == 0) return("--")
+    paste0(sum(df$status == "Passed"), "/", nrow(df))
+  })
+})
+byFn <- matrix(byFn, nrow = length(fns), dimnames = list(NULL, NULL))
+colnames(byFn) <- fmtDate(hist$started[match(detailLogs, hist$log)])
+knitr::kable(data.frame(Function = paste0("`", fns, "()`"), byFn, check.names = FALSE),
+             row.names = FALSE,
+             caption = "Passed / total EVALIDator comparison tests by function, newest run first.")
+```
+
+# Appendix: all EVALIDator comparisons in the latest run
+
+```{r appendix, eval = haveLogs && !is.null(latest)}
+app <- latestEv[order(latestEv$fn, latestEv$test), ]
+knitr::kable(data.frame(Function = paste0("`", app$fn, "()`"), Test = app$test,
+                        Checks = app$nb, Status = app$status),
+             row.names = FALSE, align = "llrl")
+```

@@ -135,20 +135,14 @@ seed_ests <- seedling(fia_data, polys = east_eco, returnSpatial = TRUE,
 str(seed_ests)
 ```
 
-Notice that each row in the `seed_ests` data frame corresponds to an estimate of white oak seedlings per acre in a given year in a given ecoregion. Using these estimates, we can make a simple GIF to visualize the shift of seedling TPA from 2003-2023. This is quickly accomplished by a simple call to the `plotFIA()` function.
+Notice that each row in the `seed_ests` data frame corresponds to an estimate of white oak seedlings per acre in a given year in a given ecoregion. Using these estimates, we can make a simple GIF to visualize the shift of seedling TPA from 2003-2023. This is quickly accomplished by a simple call to the `plotFIA()` function. note that we do not execute the following line of code.  
 
 ```{r seed gif, message = FALSE, eval = FALSE}
 plotFIA(seed_ests, y = TPA, animate = TRUE, plot.title = "Abundance (TPA)", 
         color.option = "plasma")
 ```
 
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
-knitr::include_graphics('img/seed gif-1.gif')
-```
-
-Looking at the GIF, a trend is present in the seedling abundance. Across the ecoregions, seedlings per acre tends to increase and then subsequently decrease.
-
-Let's zoom in a bit on a couple specific ecoregions.
+Let's visualize a couple specific ecoregions.
 
 ```{r}
 # Zoom in on NC, VA, TN, and SC
@@ -288,7 +282,7 @@ stability_ecoregions <- fsi(fia_data, polys = east_eco, returnSpatial = TRUE,
 ```
 
 
-This chunk will take all the information from the FSI table and turn it into a gif. The maximum and minimum limits are set to ensure the legend and colors are consistent throughout the years.
+This chunk will take all the information from the FSI table and turn it into a gif. The maximum and minimum limits are set to ensure the legend and colors are consistent throughout the years. Note the following code is not run.  
 
 ```{r stability of ecoregions gif, message=FALSE, eval = FALSE}
 plotFIA(stability_ecoregions, y = PERC_FSI, animate = TRUE, 
@@ -297,6 +291,3 @@ plotFIA(stability_ecoregions, y = PERC_FSI, animate = TRUE,
                    max(stability_ecoregions$PERC_FSI)))
 ```
 
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
-knitr::include_graphics('img/stability of ecoregions gif-1.gif')
-```

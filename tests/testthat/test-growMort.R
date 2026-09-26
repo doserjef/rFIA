@@ -288,7 +288,7 @@ for (st in c("RI", "NC", "CO")) {
   })
 }
 
-test_that("growMort() landType = 'timber' (OR) -- known macroplot residual, not exact", {
+test_that("growMort() approximately matches EVALIDator for landType = 'timber' (OR) -- known macroplot residual, within 1%", {
   # See growMort.md and vitalRates.md ("Known issues" A). Documented as a
   # regression guard that the mismatch stays small (< 1%), not a numeric
   # match assertion.

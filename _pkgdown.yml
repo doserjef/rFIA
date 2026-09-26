@@ -24,13 +24,13 @@ articles:
   - title: rFIA under the hood
     contents:
     - fiaDemystified
+    - evalidatorValidation
   - title: Examples in action 
     contents: 
     - FHM2020Report
     - fsi
     - fgcCS1
     - fgcCS2
-    - at
     - white_oak
 
 reference: 

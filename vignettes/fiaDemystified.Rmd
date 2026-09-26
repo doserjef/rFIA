@@ -132,7 +132,7 @@ all_b
 
 ## Unique domains of interest
 
-But what if we want to produce estimates for a specific kind of tree? Say Northern Red Oak (`SPCD = 833`) which is greater than 12 inches DBH (`DIA > 12`). We accomplish this using what [Bechtold and Patterson (2005)](https://www.srs.fs.usda.gov/pubs/gtr/gtr_srs080/gtr_srs080.pdf) call a 'domain indicator'. This is essentially just a vector which indicates whether a tree (or plot, condition, etc.) is within our domain of interest (red oak > 12).
+But what if we want to produce estimates for a specific kind of tree? Say Northern Red Oak (`SPCD = 833`) which is greater than 12 inches DBH (`DIA > 12`). We accomplish this using what [Bechtold and Patterson (2005)](https://research.fs.usda.gov/download/treesearch/20371.pdf) call a 'domain indicator'. This is essentially just a vector which indicates whether a tree (or plot, condition, etc.) is within our domain of interest (red oak > 12).
 
 To construct the domain indicator, we just need a vector which is the same length as our joined table, and takes a value of 1 if the stem is in the domain and 0 otherwise:
 
@@ -279,7 +279,7 @@ data <- PLOT %>%
   left_join(POP_EVAL_TYP, by = 'EVAL_CN', relationship = 'many-to-many')
 ```
 
-Now let's make a column that will adjust for non-response in our sample (See [Bechtold and Patterson (2005)](https://www.srs.fs.usda.gov/pubs/gtr/gtr_srs080/gtr_srs080.pdf), 3.4.3 'Nonsampled Plots and Plot Replacement'). Since we know there are no macroplots in RI, we don't really need to worry about that here, but we will show you anyways.
+Now let's make a column that will adjust for non-response in our sample (See [Bechtold and Patterson (2005)](https://research.fs.usda.gov/download/treesearch/20371.pdf), 3.4.3 'Nonsampled Plots and Plot Replacement'). Since we know there are no macroplots in RI, we don't really need to worry about that here, but we will show you anyways.
 
 ```{r}
 # Make some adjustment factors
@@ -306,7 +306,7 @@ data <- data %>%
   )
 ```
 
-Next, we need to construct what [Bechtold and Patterson (2005)](https://www.srs.fs.usda.gov/pubs/gtr/gtr_srs080/gtr_srs080.pdf) called a 'domain indicator function'. (see Eq. 4.1, pg. 47 of the publication). This is essentially just a vector which indicates whether a tree (or plot, condition, etc.) is within our domain of interest (live trees on forest land).
+Next, we need to construct what [Bechtold and Patterson (2005)](https://research.fs.usda.gov/download/treesearch/20371.pdf) called a 'domain indicator function'. (see Eq. 4.1, pg. 47 of the publication). This is essentially just a vector which indicates whether a tree (or plot, condition, etc.) is within our domain of interest (live trees on forest land).
 
 To construct the domain indicator, we just need a vector which is the same length as our joined table (`data`), and takes a value of 1 if the stem (or condition) is in the domain and 0 otherwise. We build separate domain indicators for estimating tree totals and area totals, because we can specify different domains of interest for both. For example, if we used our tree domain (live trees on forest land) to estimate area, then we would not actually be estimating the full forested area in RI. Instead we would estimate the forested area ONLY where live trees are currently present.
 
@@ -327,7 +327,7 @@ data <- data %>%
 
 ## Without Sampling Errors
 
-Now we are ready to start computing estimates. If we don't care aboute sampling errors, we can use the `EXPNS` column in the `POP_STRATUM` table to make our lives easier. `EXPNS` is an expansion factor which descibes the area, in acres, that a stratum represents divided by the number of sampled plots in that stratum (see [Bechtold and Patterson (2005)](https://www.srs.fs.usda.gov/pubs/gtr/gtr_srs080/gtr_srs080.pdf) section 4.2 for more information on FIA stratification procedures). When summed across all plots in the population of interest, `EXPNS` allows us to easily obtain estimates of population totals, without worrying about fancy stratifaction procedures and variance estimators.
+Now we are ready to start computing estimates. If we don't care aboute sampling errors, we can use the `EXPNS` column in the `POP_STRATUM` table to make our lives easier. `EXPNS` is an expansion factor which descibes the area, in acres, that a stratum represents divided by the number of sampled plots in that stratum (see [Bechtold and Patterson (2005)](https://research.fs.usda.gov/download/treesearch/20371.pdf) section 4.2 for more information on FIA stratification procedures). When summed across all plots in the population of interest, `EXPNS` allows us to easily obtain estimates of population totals, without worrying about fancy stratifaction procedures and variance estimators.
 
 ### No grouping variables
 
@@ -433,7 +433,7 @@ If adapting this code for your own use, make sure that your grouping variables a
 
 ## With Sampling Errors
 
-Computing estimates with associated sampling errors is a bit more complex than what we saw above, as we can no longer rely on `EXPNS` to do the heavy lifting for us. In short, we will add a few additional steps when computing tree totals and area totals, summarizing at the strata and estimation unit level along the way. When adding grouping variables, we will need to modify our code further, treating each group as a unique population and summarizing these populations individually. We will follow the procedures outlined by [Bechtold and Patterson (2005)](https://www.srs.fs.usda.gov/pubs/gtr/gtr_srs080/gtr_srs080.pdf) (see section 4) for our computations.
+Computing estimates with associated sampling errors is a bit more complex than what we saw above, as we can no longer rely on `EXPNS` to do the heavy lifting for us. In short, we will add a few additional steps when computing tree totals and area totals, summarizing at the strata and estimation unit level along the way. When adding grouping variables, we will need to modify our code further, treating each group as a unique population and summarizing these populations individually. We will follow the procedures outlined by [Bechtold and Patterson (2005)](https://research.fs.usda.gov/download/treesearch/20371.pdf) (see section 4) for our computations.
 
 Before we get started, Let's check out what type of estimation methods were used to determine values in the POP tables, as this will influence which variance estimators we use.
 
