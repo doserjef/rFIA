@@ -4,7 +4,8 @@ fsi <- function(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
                 treeDomain = NULL, areaDomain = NULL,
                 variance = TRUE, byPlot = FALSE, useSeries = FALSE,
                 mostRecent = FALSE, scaleBy = NULL, betas = NULL, 
-                returnBetas = FALSE, nCores = 1) {
+                returnBetas = FALSE, normalFilter = TRUE, 
+                disturbFilter = TRUE, nCores = 1) {
   
   # Need rjags and coda installed if we're going to model size-density relationships
   if (!is.null(betas) & is.null(find.package('R2jags')) & is.null(find.package('coda'))) {
@@ -49,7 +50,8 @@ If not already installed, you can install JAGS from SourceForge:
   out <- lapply(X = iter, FUN = fsiStarter, db, grpBy_quo = grpBy_quo, 
                 scaleBy_quo, polys, returnSpatial, bySpecies, bySizeClass,
                 landType, treeType, method, lambda, treeDomain, areaDomain,
-                byPlot, useSeries, mostRecent, nCores, remote, mr)
+                byPlot, useSeries, mostRecent, nCores, remote, mr, normalFilter, 
+                disturbFilter)
   
   # Extract results from list.  
   out <- unlist(out, recursive = FALSE)

@@ -29,6 +29,7 @@ export(area)
 export(customPSE)
 export(fsi)
 export(areaChange)
+# export(carbonSAE)
 
 
 import(dplyr)
@@ -65,4 +66,5 @@ importFrom(utils,read.csv)
 importFrom(utils,tail)
 importFrom(utils,type.convert)
 importFrom(utils,unzip)
+importFrom(terra, project, vect)
 

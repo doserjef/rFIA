@@ -15,7 +15,8 @@ fsi(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
     lambda = 0.5, treeDomain = NULL, areaDomain = NULL,
     variance = TRUE, byPlot = FALSE,
     useSeries = FALSE, mostRecent = FALSE, scaleBy = NULL,
-    betas = NULL, returnBetas = FALSE, nCores = 1)
+    betas = NULL, returnBetas = FALSE, normalFilter = TRUE, 
+    disturbFilter = TRUE, nCores = 1)
 }
 
 %- maybe also 'usage' for other objects documented here.
@@ -56,7 +57,11 @@ fsi(db, grpBy = NULL, polys = NULL, returnSpatial = FALSE,
 
   \item{betas}{data.frame; coefficients of maximum size-density models returned in a previous call to \code{fsi} when \code{returnBetas = TRUE}. See examples.}
 
-  \item{returnBetas}{logical; If true, returns estimated coefficients of maximum size-density models along with results. These coefficients can then be handed to the \code{beta} argument (see above) in subsequent runs. This speeds up processing and ensures the same coefficients are used to model maximum-size density curves between function calls. See Value below for more details. }
+  \item{returnBetas}{logical; If TRUE, returns estimated coefficients of maximum size-density models along with results. These coefficients can then be handed to the \code{beta} argument (see above) in subsequent runs. This speeds up processing and ensures the same coefficients are used to model maximum-size density curves between function calls. See Value below for more details. }
+
+  \item{normalFilter}{logical; If TRUE, only plots that show an approximately normal tree diameter distribution (i.e., even-aged) will be used for estimating the maximum size density curve. An approximately normal tree diameter distribution is defined as exhibiting Pearson's moment coefficient of skewness between -1 and 1.} 
+
+  \item{disturbFilter}{logical; If TRUE, only plots that lack evidence of recent (within remeasurement period or preceding 5 years) disturbance and/or silvicultural treatment are used for estimating the maximum size density curve.}
 
   \item{nCores}{numeric; number of cores to use for parallel implementation. Check available cores using \code{\link{detectCores}}. Default = 1, serial processing.}
 
