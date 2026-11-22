@@ -1,4 +1,5 @@
-fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot) {
+fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot, normalFilter, 
+                       disturbFilter) {
   
   # Add scaleBy to grpBy, Does not modify outside environment, just need 
   # scaleBy in here as well
@@ -12,20 +13,26 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot) {
   
   # Selecting the plots for one county
   db$PLOT <- plts[[x]]
-  
-  # Disturbance or treatment ever happen on the plot remeasurement? If so
-  # we want to cut it before we model the max size-density curve
-  disturb <- select(db$PLOT, PLT_CN, pltID) %>%
-    dplyr::left_join(select(db$COND, PLT_CN, DSTRBCD1, TRTCD1), by = 'PLT_CN') %>%
-    dplyr::mutate(DSTRBCD1 = tidyr::replace_na(DSTRBCD1, 0),
-                  TRTCD1 = tidyr::replace_na(TRTCD1, 0)) %>%
-    # Exclude plots showing evidence of disturbance and/or (non-natural-regen)
-    # silvicultural treatment -- either alone disqualifies a plot from the
-    # max size-density curve calibration set (Stanke et al. 2021). Natural
-    # regen (TRTCD1 == 40) is not treated as a disqualifying treatment.
-    dplyr::filter(DSTRBCD1 > 0 | c(TRTCD1 > 0 & !c(TRTCD1 %in% 40))) %>%
-    # These plots were disturbed or treated
-    dplyr::distinct(PLT_CN, pltID)
+ 
+  # Cut plots with disturbance if desired. There are mixed results in the 
+  # biometrics literature one whether this should be done when estimating 
+  # max size-density curves, so providing it as an argument. 
+  if (disturbFilter) {
+    disturb <- select(db$PLOT, PLT_CN, pltID) %>%
+      dplyr::left_join(select(db$COND, PLT_CN, DSTRBCD1, TRTCD1), by = 'PLT_CN') %>%
+      dplyr::mutate(DSTRBCD1 = tidyr::replace_na(DSTRBCD1, 0),
+                    TRTCD1 = tidyr::replace_na(TRTCD1, 0)) %>%
+      # Exclude plots showing evidence of disturbance and/or (non-natural-regen)
+      # silvicultural treatment -- either alone disqualifies a plot from the
+      # max size-density curve calibration set (Stanke et al. 2021). Natural
+      # regen (TRTCD1 == 40) is not treated as a disqualifying treatment.
+      dplyr::filter(DSTRBCD1 > 0 | c(TRTCD1 > 0 & !c(TRTCD1 %in% 40))) %>%
+      # These plots were disturbed or treated
+      dplyr::distinct(PLT_CN, pltID) %>%
+      pull(pltID)
+  } else {
+    disturb <- NULL 
+  }
   
   
   # Which grpByNames are in which table? Helps us subset below. 
@@ -132,7 +139,7 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot) {
   # remeasurement. 
   t1 <- data %>%
     # No disturbance/treatment plots. 
-    dplyr::filter(!c(pltID %in% disturb$pltID)) %>%
+    dplyr::filter(!c(pltID %in% disturb)) %>%
     dplyr::distinct(PLT_CN, SUBP, TREE, ONEORTWO, .keep_all = TRUE) %>% 
     dtplyr::lazy_dt() %>% 
     dplyr::filter(STATUSCD == 1) %>% 
@@ -151,10 +158,14 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot) {
     # Calculate average basal area per tree for t1 and t2
     dplyr::mutate(BA1 = dplyr::if_else(TPA1 != 0, BAA1 / TPA1, 0), 
                   BA2 = dplyr::if_else(TPA2 != 0, BAA2 / TPA2, 0)) %>% 
-    # Remove plots with high skewness as those plots should not inform the calculation 
-    # of the maximum density curve. 
-    dplyr::filter(skew2 >= -1 & skew2 <= 1) %>% 
     as.data.frame()
+
+  # Remove plots with high skewness if desired for estimation of the max density curve. 
+  if (normalFilter) {
+    t1 <- t1 %>%
+      dplyr::filter(skew2 >= -1 & skew2 <= 1) %>% 
+      as.data.frame()
+  }
   
   if (byPlot) {
     grpBy <- c('YEAR', grpBy)

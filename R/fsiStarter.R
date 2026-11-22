@@ -3,7 +3,8 @@ fsiStarter <- function(x, db, grpBy_quo = NULL, scaleBy_quo = NULL, polys = NULL
                        landType = 'forest', treeType = 'live', method = 'TI',
                        lambda = .5, treeDomain = NULL, areaDomain = NULL,
                        byPlot = FALSE, useSeries = FALSE,
-                       mostRecent = FALSE, nCores = 1, remote, mr) {
+                       mostRecent = FALSE, nCores = 1, remote, mr, normalFilter, 
+                       disturbFilter ) {
   
   # Read required data, prep the database -------------------------------------
   reqTables <- c('PLOT', 'TREE', 'COND', 'POP_PLOT_STRATUM_ASSGN',
@@ -241,12 +242,14 @@ fsiStarter <- function(x, db, grpBy_quo = NULL, scaleBy_quo = NULL, polys = NULL
       })
       out <- parLapply(cl, X = names(plts), fun = fsiHelper1, plts,
                        db[names(db) %in% c('COND', 'TREE')],
-                       grpBy, scaleBy, byPlot)
+                       grpBy, scaleBy, byPlot, normalFilter, 
+                       disturbFilter)
       #stopCluster(cl) # Keep the cluster active for the next run
     } else { # Unix systems
       out <- mclapply(names(plts), FUN = fsiHelper1, plts,
                       db[names(db) %in% c('COND', 'TREE')],
-                      grpBy, scaleBy, byPlot, mc.cores = nCores)
+                      grpBy, scaleBy, byPlot, mc.cores = nCores, 
+                      normalFilter, disturbFilter)
     }
   })
   

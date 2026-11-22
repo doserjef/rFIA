@@ -139,6 +139,11 @@ Full details on this validation are provided in the development version of `rFIA
 
 ### `fsi()`
 
++ Added two new arguments to `fsi()`: `normalFilter` and `disturbFilter`. These logical arguments allow
+  users to turn on or off the filtering of plots used in the fitting of the maximum size density curves. 
+  `normalFilter` controls whether the plots are filtered to only include those plots that show an approximately
+  normal diameter distrution, while `disturbFilter` is used to filter out plots that have shown any 
+  type of disturbance. 
 + Fixed a bug in `fsi()` where the plot-level remeasurement interval (`REMPER`) was incorrectly
   multiplied by the subplot/microplot/macroplot nonresponse adjustment factor before being used as a
   grouping key to recombine a plot's per-plot-basis rows back into a single row. Because that
@@ -155,7 +160,7 @@ Full details on this validation are provided in the development version of `rFIA
   set to match Stanke et al. (2021): a plot showing evidence of disturbance *or* (non-natural-regen)
   silvicultural treatment is now excluded, rather than requiring both simultaneously. Previously, a
   plot with significant disturbance but no recorded follow-up treatment (e.g. an untreated wildfire)
-  was incorrectly retained in the calibration set.
+  was incorrectly retained in the calibration set. This is only relevant when `disturbFilter = TRUE`. 
 + Removed the `totals` argument from `fsi()`. It had no effect on the returned output (both branches
   of the `totals`-dependent code returned identical columns) despite being documented as adding raw
   population totals; every other estimator's `totals` argument works as documented; `fsi()`'s did not

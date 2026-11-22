@@ -1,7 +1,7 @@
 Package: rFIA
 Type: Package
 Title: Estimation of Forest Variables using the FIA Database
-Version: 1.2.0
+Version: 1.2.0.9000
 Authors@R: c(person("Jeffrey", "Doser", role=c("aut", "cre"), email="jwdoser@ncsu.edu"), person("Hunter", "Stanke", role=c("aut")), person("Andrew", "Finley", role = c("aut")))
 Author: Jeffrey Doser [aut, cre], Hunter Stanke [aut], Andrew Finley [aut]
 Maintainer: Jeffrey Doser <jwdoser@ncsu.edu> 
@@ -21,7 +21,8 @@ Imports:
     data.table,
     tidyselect (>= 1.0.0),
     rlang,
-    ggplot2
+    ggplot2,
+    terra
 Suggests: 
     knitr,
     rmarkdown,

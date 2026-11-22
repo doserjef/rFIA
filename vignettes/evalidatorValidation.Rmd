@@ -239,6 +239,10 @@ test will catch any growth in the discrepancy. The `vitalRates()` timberland
 comparisons run only for Rhode Island, North Carolina, and Colorado, where the
 two agree exactly. 
 
+## Mismatch in `carbon()` in 2026-11-07 Test
+
+In the test run on November 7, 2026, there were five failed tests for the `carbon()` function when testing on Oregon data. This was not a bug in `rFIA`, but was just a result of data drift between the local test files and the Oregon FIA data available on the FIA Data Mart. These discrepancies were updated on November 17, 2026. 
+
 # Latest results
 
 ```{r latestHeader, results = 'asis', eval = haveLogs}
