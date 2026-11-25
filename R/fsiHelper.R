@@ -14,9 +14,7 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot, normalFilter,
   # Selecting the plots for one county
   db$PLOT <- plts[[x]]
  
-  # Cut plots with disturbance if desired. There are mixed results in the 
-  # biometrics literature one whether this should be done when estimating 
-  # max size-density curves, so providing it as an argument. 
+  # Cut plots with disturbance if desired.
   if (disturbFilter) {
     disturb <- select(db$PLOT, PLT_CN, pltID) %>%
       dplyr::left_join(select(db$COND, PLT_CN, DSTRBCD1, TRTCD1), by = 'PLT_CN') %>%
@@ -24,8 +22,8 @@ fsiHelper1 <- function(x, plts, db, grpBy, scaleBy, byPlot, normalFilter,
                     TRTCD1 = tidyr::replace_na(TRTCD1, 0)) %>%
       # Exclude plots showing evidence of disturbance and/or (non-natural-regen)
       # silvicultural treatment -- either alone disqualifies a plot from the
-      # max size-density curve calibration set (Stanke et al. 2021). Natural
-      # regen (TRTCD1 == 40) is not treated as a disqualifying treatment.
+      # max size-density curve calibration set. Natural regen (TRTCD1 == 40) 
+      # is not treated as a disqualifying treatment.
       dplyr::filter(DSTRBCD1 > 0 | c(TRTCD1 > 0 & !c(TRTCD1 %in% 40))) %>%
       # These plots were disturbed or treated
       dplyr::distinct(PLT_CN, pltID) %>%

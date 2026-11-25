@@ -1,3 +1,8 @@
+# rFIA v1.2.1
+
++ Updated `fsi()` to include two additional arguments: `normalFilter` and `disturbFilter`. These are logical variables that control the plots that are filtered out of the calculation of the maximum size-density curves. 
++ `growMort` was not reporting the sampling error for the net change ratio estimate. This is now reported as a column in the output.  
+
 # rFIA v1.2.0
 
 This version implements a variety of updates to model estimation functions after a complete validation of the package's functionality. An extensive suite of unit tests are implemented for checking `rFIA` estimates with estimates from EVALIDator to ensure consistency of rFIA with updates in FIADB. This validation assessment fixed multiple bugs, particularly related to the reporting of sample sizes that were not always consistent dependent on different filtering criteria implemented in the estimation functions. Updates are broken down in the following based on specific functions.  
